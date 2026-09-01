@@ -1,4 +1,7 @@
 # Nebelmesser Playground
 
 ## Hilbert Clock
-[![Hilbert Clock](https://nebelmesser.com/hilbert/img/screen.png)](https://nebelmesser.com/hilbert/)
+[![Hilbert Clock](hilbert/img/screen.png)](hilbert/)
+
+## Tesseract Viewer
+[![Tesseract Viewer](4d/img/preview.png)](4d/)
