@@ -1,3 +1,5 @@
+<center><img style="border: none; box-shadow: none" src="assets/fire-under-construction-animation.gif" /></center>
+
 ## Double Pendulum Fractal Zoom
 My video made with [dp_map](https://github.com/nebelmesser/dp_map)
 
