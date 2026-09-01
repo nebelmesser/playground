@@ -1,0 +1,45 @@
+---
+---
+
+@import "{{ site.theme }}";
+
+/* Custom styles — edit below this line.
+   https://docs.github.com/en/pages/setting-up-a-github-pages-site-with-jekyll/adding-a-theme-to-your-github-pages-site-using-jekyll#customizing-your-themes-css */
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  background: #1c1c1c;
+}
+
+.wrapper,
+section,
+#header nav {
+  max-width: 880px;
+}
+
+section img {
+  display: block;
+  border-radius: 8px;
+  border: 1px solid #434343;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+section {
+  margin-top: 24px;
+}
+
+#title {
+  margin-bottom: 28px;
+}
+
+#site-credits {
+  overflow: hidden;
+  margin-top: 48px;
+}
+
+#site-credits .credits {
+  margin-top: 0;
+}
