@@ -35,6 +35,14 @@ section {
   margin-bottom: 28px;
 }
 
+#title h1 a {
+  color: inherit;
+}
+
+#title h1 a:hover {
+  color: #ffcc00;
+}
+
 #site-credits {
   overflow: hidden;
   margin-top: 48px;
@@ -42,4 +50,9 @@ section {
 
 #site-credits .credits {
   margin-top: 0;
+}
+
+#site-credits .credits.right {
+  float: right;
+  text-align: right;
 }

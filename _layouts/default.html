@@ -21,7 +21,11 @@
     <div class="wrapper">
       <section>
         <div id="title">
+          {% if page.url == '/' or page.url == '/index.html' %}
           <h1>{{ site.title | default: site.github.repository_name }}</h1>
+          {% else %}
+          <h1><a href="{{ '/' | relative_url }}">{{ site.title | default: site.github.repository_name }}</a></h1>
+          {% endif %}
           <p>{{ site.description | default: site.github.project_tagline }}</p>
         </div>
 
@@ -29,8 +33,10 @@
 
         <footer id="site-credits">
           <hr>
-          <span class="credits left">By <a href="{{ site.github.owner_url }}">{{ site.github.owner_name }}</a></span>
-          &bull; Theme by <a href="https://twitter.com/mattgraham">mattgraham</a></span>
+          {% unless page.url == '/' or page.url == '/index.html' %}
+          <span class="credits left"><a href="{{ '/' | relative_url }}">← Back to main page</a></span>
+          {% endunless %}
+          <span class="credits right">By <a href="{{ site.github.owner_url }}">{{ site.github.owner_name }}</a> &bull; Theme by <a href="https://twitter.com/mattgraham">mattgraham</a></span>
         </footer>
       </section>
     </div>
