@@ -10,4 +10,4 @@ My video made with [dp_map](https://github.com/nebelmesser/dp_map)
 [![Tesseract Viewer](4d/img/preview.png)](4d/)
 
 ## Links
- [github](https://github.com/nebelmesser) • [instagram](https://instagram.com/nebelmesser) • [youtube](https://youtube.com/der.nebelmesser) • [email](mailto:der.nebelmesser@gmail.com)
+ [meme channel](https://t.me/s/nitschego) [github](https://github.com/nebelmesser) • [instagram](https://instagram.com/nebelmesser) • [youtube](https://youtube.com/der.nebelmesser) • [email](mailto:der.nebelmesser@gmail.com)
