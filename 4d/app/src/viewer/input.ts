@@ -14,7 +14,7 @@ import { closeMenu } from './menu';
 function isUiEvent(event: Event): boolean {
   return event.target instanceof Element && Boolean(
     event.target.closest('#ui-container')
-    || event.target.closest('#mode-bar')
+    || event.target.closest('#chrome-center')
     || event.target.closest('#menu-toggle')
     || event.target.closest('#menu-backdrop')
     || event.target.closest('#axes-hud')

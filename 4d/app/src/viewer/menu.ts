@@ -59,7 +59,7 @@ export function bindMenu(
   const menuToggle = document.getElementById('menu-toggle') as HTMLButtonElement;
   const menuBackdrop = document.getElementById('menu-backdrop') as HTMLElement;
   const uiContainer = document.getElementById('ui-container') as HTMLElement;
-  const objectSelect = document.getElementById('objectSelect') as HTMLSelectElement;
+  const objectBar = document.getElementById('object-bar');
   const tiltModeSelect = document.getElementById('tiltModeSelect') as HTMLSelectElement;
   const tiltInvert = document.getElementById('tiltInvert') as HTMLInputElement;
   const tiltInvertGroup = document.getElementById('tiltInvertGroup') as HTMLElement;
@@ -73,14 +73,13 @@ export function bindMenu(
   const sliceLabel = sliceCountValue;
   const sizeLabel = sizeValue;
 
-  objectSelect.replaceChildren();
-  for (const entry of CATALOG) {
-    const option = document.createElement('option');
-    option.value = entry.id;
-    option.textContent = entry.label;
-    objectSelect.append(option);
+  function syncObjectButtons(id: ObjectId): void {
+    objectBar?.querySelectorAll<HTMLButtonElement>('button[data-object]').forEach((button) => {
+      button.classList.toggle('is-active', button.dataset.object === id);
+    });
   }
-  objectSelect.value = controls.objectId;
+
+  syncObjectButtons(controls.objectId);
 
   function setMenuOpen(open: boolean): void {
     uiContainer.classList.toggle('is-open', open);
@@ -137,7 +136,7 @@ export function bindMenu(
 
   function syncObjectUi(mesh: Mesh3D | null): void {
     if (!mesh) return;
-    objectSelect.value = mesh.id;
+    syncObjectButtons(mesh.id);
     if (objectCredit) objectCredit.hidden = mesh.id !== 'matryoshka';
     sizeSlider.value = String(controls.objectSize);
     sizeLabel.textContent = formatNum(controls.objectSize);
@@ -167,11 +166,12 @@ export function bindMenu(
     setViewMode((button as HTMLElement).dataset.mode as ViewMode);
   });
 
-  objectSelect.addEventListener('change', () => {
-    onObjectChange(objectSelect.value as ObjectId);
-  });
-  objectSelect.addEventListener('input', () => {
-    onObjectChange(objectSelect.value as ObjectId);
+  objectBar?.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest('button[data-object]');
+    if (!button) return;
+    const id = (button as HTMLElement).dataset.object as ObjectId;
+    if (!CATALOG.some((entry) => entry.id === id)) return;
+    onObjectChange(id);
   });
 
   tiltModeSelect.addEventListener('change', () => {
