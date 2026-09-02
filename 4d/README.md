@@ -1,9 +1,9 @@
 # 4D Viewer
 
-[![4D Viewer](https://nebelmesser.com/4d/img/preview.png)](https://nebelmesser.com/4d/tesseract.html)
+[![4D Viewer](https://nebelmesser.com/4d/img/preview.png)](https://nebelmesser.com/4d/viewer.html)
 
-A single-file tesseract (4-cube) viewer. Open the [live page](https://nebelmesser.com/4d/tesseract.html)
-or the local `4d/viewer.html`. It loads Three.js from a CDN; nothing else is required.
+A 4D viewer. Open the [live page](https://nebelmesser.com/4d/viewer.html)
+or the local `4d/viewer.html`.
 
 A tesseract is two ordinary cubes sitting at W = −1 and W = +1, with matching
 corners joined by edges that run only along W. The viewer rotates that object
@@ -68,13 +68,12 @@ The hamburger opens the settings (always open on a wide desktop):
 - **Fill opacity** — density of the translucent W± copies.
 - **Fill W±** — translucent caps at W = −1 and W = +1 (cubes or dolls).
 - **Cage** — (mesh objects) a thinned wireframe of the 3D surface at both ends.
-- **W-axis slices** — extra copies at even W values between −1 and +1,
-  colored on a blue→red ramp. **Slice count** is 2–16. The tesseract draws
-  those as wire cubes; the matryoshka draws nested translucent dolls.
+- **W-axis slices** — extra copies at even W values between −1 and +1.
+  **Slice count** is 2–16. The tesseract draws those as wire cubes (blue→red);
+  the matryoshka draws nested translucent dolls with the painted texture.
 
-W-edges (the “spokes” along the fourth axis) are always drawn. On the doll
-they are a sparse silhouette set, so they read in stereo without filling the
-view.
+The tesseract still draws W-edges between matching cube corners. The doll does
+not: the two translucent copies and stereo parallax are enough to read W.
 
 ## Axes
 

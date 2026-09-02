@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta http-equiv="Permissions-Policy" content="accelerometer=*, gyroscope=*, magnetometer=*">
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-5D8EGFYM3L"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-5D8EGFYM3L');
+    </script>
+    <title>4D Viewer</title>
+    <meta name="description" content="A 4D viewer: extrude 3D objects along W, rotate in four dimensions, project to 3D, and look in stereo">
+    <link rel="canonical" href="https://nebelmesser.com/4d/viewer.html">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://nebelmesser.com/4d/viewer.html">
+    <meta property="og:title" content="4D Viewer">
+    <meta property="og:description" content="A 4D viewer: extrude 3D objects along W, rotate in four dimensions, project to 3D, and look in stereo">
+    <meta property="og:image" content="https://nebelmesser.com/4d/img/preview.png">
+    <meta property="og:image:width" content="2400">
+    <meta property="og:image:height" content="1260">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="4D Viewer">
+    <meta name="twitter:description" content="A 4D viewer: extrude 3D objects along W, rotate in four dimensions, project to 3D, and look in stereo">
+    <meta name="twitter:image" content="https://nebelmesser.com/4d/img/preview.png">
+  <script type="module" src="./assets/viewer.js"></script>
+  <link rel="stylesheet" href="./assets/viewer.css">
+</head>
+<body>
+    <button type="button" id="menu-toggle" aria-label="Settings" aria-expanded="false">
+        <span></span><span></span><span></span>
+    </button>
+    <div id="menu-backdrop"></div>
+    <div id="mode-bar">
+        <button type="button" data-mode="mono">Mono</button>
+        <button type="button" data-mode="cross" class="is-active">Cross-eyed</button>
+        <button type="button" data-mode="parallel">Parallel</button>
+    </div>
+    <button type="button" id="tilt-banner" hidden></button>
+
+    <div id="ui-container">
+        <label class="field-label">
+            <span>Object</span>
+            <select id="objectSelect"></select>
+        </label>
+        <label class="slider-label">
+            <span class="row"><span>Size</span><span id="cubeSizeValue">1.00</span></span>
+            <input type="range" id="cubeSizeSlider" min="0.40" max="2.20" step="0.01" value="1.00">
+        </label>
+        <label class="slider-label">
+            <span class="row"><span>Stereo strength</span><span id="eyeSepValue">1.00</span></span>
+            <input type="range" id="eyeSepSlider" min="0.12" max="1.40" step="0.01" value="1.00">
+        </label>
+        <label class="slider-label">
+            <span class="row"><span>Perspective</span><span id="focusValue">3.0</span></span>
+            <input type="range" id="focusSlider" min="2.2" max="10.0" step="0.1" value="3.0">
+        </label>
+        <label class="slider-label">
+            <span class="row"><span>Fill opacity</span><span id="opacityValue">0.36</span></span>
+            <input type="range" id="opacitySlider" min="0" max="1" step="0.01" value="0.36">
+        </label>
+        <div id="tiltControls">
+            <label class="field-label">
+                <span>Tilt rotates</span>
+                <select id="tiltModeSelect">
+                    <option value="off">Off</option>
+                    <option value="xyz">3D (around W)</option>
+                    <option value="xw-yw" selected>4D (XW · YW)</option>
+                    <option value="zw">ZW plane</option>
+                </select>
+            </label>
+            <div class="control-group" id="tiltInvertGroup">
+                <label class="checkbox-label"><input type="checkbox" id="tiltInvert"> Invert tilt</label>
+            </div>
+        </div>
+        <label class="slider-label">
+            <span class="row"><span>W slices</span><span id="sliceCountValue">0</span></span>
+            <input type="range" id="sliceCountSlider" min="0" max="16" step="1" value="0">
+            <div class="slider-ticks" id="sliceTicks" aria-hidden="true"></div>
+        </label>
+        <div class="hint" id="stereoHint">
+            Cross your eyes until the two images merge into one.
+        </div>
+        <div class="hint" style="margin-top: 10px;">
+            Drag or one finger — 3D rotation, holds W<br>
+            Shift + drag or two-finger pan — 4D rotation<br>
+            Shift + scroll or pinch — ZW plane<br>
+            <span class="hint-phone">On a phone — tilt (see Tilt rotates)</span>
+            <span class="hint-desktop">On a phone — tilt the device to rotate in 4D</span>
+        </div>
+        <a class="learn-more" href="/4d/">Learn more →</a>
+    </div>
+
+    <div id="stereo-split"></div>
+    <div id="axes-hud">
+        <div class="axis-bar">
+        <div class="axis-angles" id="angleCoords">
+            <div class="coord" data-plane="xy">
+                <span class="gesture"><span class="g-desk">—</span><span class="g-phone">—</span></span>
+                <span class="name"><i class="ax-x">X</i><i class="ax-y">Y</i></span>
+                <span class="readout">
+                    <span class="value">0°</span>
+                    <span class="steppers">
+                        <button type="button" data-dir="1" aria-label="Increase XY rotation">▲</button>
+                        <button type="button" data-dir="-1" aria-label="Decrease XY rotation">▼</button>
+                    </span>
+                </span>
+            </div>
+            <div class="coord" data-plane="xz">
+                <span class="gesture"><span class="g-desk">drag ↔</span><span class="g-phone">finger ↔</span></span>
+                <span class="name"><i class="ax-x">X</i><i class="ax-z">Z</i></span>
+                <span class="readout">
+                    <span class="value">-90°</span>
+                    <span class="steppers">
+                        <button type="button" data-dir="1" aria-label="Increase XZ rotation">▲</button>
+                        <button type="button" data-dir="-1" aria-label="Decrease XZ rotation">▼</button>
+                    </span>
+                </span>
+            </div>
+            <div class="coord" data-plane="yz">
+                <span class="gesture"><span class="g-desk">drag ↕</span><span class="g-phone">finger ↕</span></span>
+                <span class="name"><i class="ax-y">Y</i><i class="ax-z">Z</i></span>
+                <span class="readout">
+                    <span class="value">0°</span>
+                    <span class="steppers">
+                        <button type="button" data-dir="1" aria-label="Increase YZ rotation">▲</button>
+                        <button type="button" data-dir="-1" aria-label="Decrease YZ rotation">▼</button>
+                    </span>
+                </span>
+            </div>
+            <div class="coord" data-plane="xw">
+                <span class="gesture"><span class="g-desk">⇧drag ↔</span><span class="g-phone">2 fingers ↔</span></span>
+                <span class="name"><i class="ax-x">X</i><i class="ax-w">W</i></span>
+                <span class="readout">
+                    <span class="value">0°</span>
+                    <span class="steppers">
+                        <button type="button" data-dir="1" aria-label="Increase XW rotation">▲</button>
+                        <button type="button" data-dir="-1" aria-label="Decrease XW rotation">▼</button>
+                    </span>
+                </span>
+            </div>
+            <div class="coord" data-plane="yw">
+                <span class="gesture"><span class="g-desk">⇧drag ↕</span><span class="g-phone">2 fingers ↕</span></span>
+                <span class="name"><i class="ax-y">Y</i><i class="ax-w">W</i></span>
+                <span class="readout">
+                    <span class="value">0°</span>
+                    <span class="steppers">
+                        <button type="button" data-dir="1" aria-label="Increase YW rotation">▲</button>
+                        <button type="button" data-dir="-1" aria-label="Decrease YW rotation">▼</button>
+                    </span>
+                </span>
+            </div>
+            <div class="coord" data-plane="zw">
+                <span class="gesture"><span class="g-desk">⇧wheel</span><span class="g-phone">pinch</span></span>
+                <span class="name"><i class="ax-z">Z</i><i class="ax-w">W</i></span>
+                <span class="readout">
+                    <span class="value">-90°</span>
+                    <span class="steppers">
+                        <button type="button" data-dir="1" aria-label="Increase ZW rotation">▲</button>
+                        <button type="button" data-dir="-1" aria-label="Decrease ZW rotation">▼</button>
+                    </span>
+                </span>
+            </div>
+        </div>
+        <button type="button" id="angle-reset">Reset</button>
+        </div>
+    </div>
+
+    <script>
+      window.addEventListener('load', () => {
+        window.setTimeout(() => {
+          if (document.querySelector('canvas.main-view')) return;
+          const el = document.createElement('div');
+          el.textContent = 'Viewer script failed to load. Force-refresh the page.';
+          el.style.cssText = 'position:fixed;left:12px;right:12px;top:58px;z-index:9;color:#f88;font:14px sans-serif;text-align:center';
+          document.body.appendChild(el);
+        }, 2500);
+      });
+    </script>
+</body>
+</html>

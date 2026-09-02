@@ -1,0 +1,23 @@
+{
+  "name": "4d-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "prepare-matryoshka": "tsx scripts/prepare-matryoshka.ts"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "^4.2.1",
+    "@gltf-transform/functions": "^4.2.1",
+    "@types/node": "^24.3.0",
+    "@types/three": "^0.170.0",
+    "sharp": "^0.34.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.3"
+  }
+}

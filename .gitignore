@@ -1,4 +1,5 @@
 .DS_Store
+
 _site/
 .sass-cache/
 .jekyll-cache/
@@ -10,3 +11,16 @@ Gemfile
 .ruby-version
 bin/*
 bin/serve
+
+node_modules/
+4d/app/node_modules/
+.certs/
+
+# Source kit, the site uses 4d/models/matryoshka.glb
+4d/matryoshka-doll/
+
+# Leftover hashed Vite builds; keep 4d/assets/viewer.js and viewer.css
+4d/assets/viewer-*.js
+4d/assets/viewer-*.css
+4d/assets/tesseract-*.js
+4d/assets/tesseract-*.css

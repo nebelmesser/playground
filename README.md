@@ -2,8 +2,8 @@
 <img style="border: none; box-shadow: none" src="assets/fire-under-construction-animation.gif" />
 </center>
 
-## Tesseract Viewer
-[![Tesseract Viewer](4d/img/preview.png)](4d/)
+## 4D Viewer
+[![4D Viewer](4d/img/preview.png)](4d/viewer.html)
 
 ## Hilbert Clock
 [![Hilbert Clock](hilbert/img/screen.png)](hilbert/)

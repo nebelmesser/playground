@@ -3,3 +3,20 @@ tagline: Experiments in visualization
 description: Experiments in visualization
 theme: jekyll-theme-midnight
 show_downloads: false
+host: 0.0.0.0
+webrick:
+  headers:
+    Access-Control-Allow-Origin: "*"
+    Permissions-Policy: "accelerometer=*, gyroscope=*, magnetometer=*"
+exclude:
+  - 4d/app
+  - 4d/matryoshka-doll
+  - node_modules/
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+  - Gemfile
+  - Gemfile.lock
+  - bin/
+
