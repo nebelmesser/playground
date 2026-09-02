@@ -1,4 +1,4 @@
-import { DEFAULT_OPACITY } from '../math/constants';
+import { DEFAULT_OPACITY, MAX_SLICES } from '../math/constants';
 import type { DisplayState, Mesh3D, ObjectId, TiltMode, ViewMode } from '../math/types';
 import { CATALOG } from '../objects/catalog';
 import {
@@ -215,9 +215,9 @@ export function bindMenu(
   });
 
   if (sliceTicks && sliceTicks.childElementCount === 0) {
-    for (let i = 0; i <= 16; i++) {
+    for (let i = 0; i <= MAX_SLICES; i++) {
       const mark = document.createElement('i');
-      if (i % 4 === 0) mark.classList.add('is-major');
+      if (i % 3 === 0) mark.classList.add('is-major');
       sliceTicks.append(mark);
     }
   }
