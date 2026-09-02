@@ -9,6 +9,7 @@ import {
   lockTiltAxis,
   unlockTiltAxis,
 } from './deviceOrbit';
+import { closeMenu } from './menu';
 
 function isUiEvent(event: Event): boolean {
   return event.target instanceof Element && Boolean(
@@ -78,9 +79,11 @@ export function bindInput(angles: Angles, canvas: HTMLCanvasElement): void {
       if (!pair) return;
       if (lastMidpoint) {
         rotate4D(angles, pair.mid.x - lastMidpoint.x, pair.mid.y - lastMidpoint.y);
+        closeMenu();
       }
       if (lastPinchDist > 0) {
         angles.zw += (pair.dist - lastPinchDist) * 0.012;
+        closeMenu();
       }
       lastMidpoint = pair.mid;
       lastPinchDist = pair.dist;
@@ -89,8 +92,10 @@ export function bindInput(angles: Angles, canvas: HTMLCanvasElement): void {
 
     const dx = event.clientX - prev.x;
     const dy = event.clientY - prev.y;
+    if (dx === 0 && dy === 0) return;
     if (event.shiftKey) rotate4D(angles, dx, dy);
     else rotate3D(angles, dx, dy);
+    closeMenu();
   });
 
   function endPointer(event: PointerEvent): void {
@@ -123,17 +128,20 @@ export function bindInput(angles: Angles, canvas: HTMLCanvasElement): void {
     if (event.ctrlKey) {
       if (lastGestureScale === 1) {
         angles.zw += dy * WHEEL_SENSITIVITY;
+        closeMenu();
       }
       return;
     }
 
     if (event.shiftKey) {
       angles.zw += dy * WHEEL_SENSITIVITY;
+      closeMenu();
       return;
     }
 
     angles.xw += dx * WHEEL_PAN_SENSITIVITY;
     angles.yw += dy * WHEEL_PAN_SENSITIVITY;
+    closeMenu();
   }, { passive: false });
 
   window.addEventListener('gesturestart', (event) => {
@@ -148,6 +156,7 @@ export function bindInput(angles: Angles, canvas: HTMLCanvasElement): void {
     const scale = (event as GestureEvent).scale || 1;
     angles.zw += (scale - lastGestureScale) * 1.4;
     lastGestureScale = scale;
+    closeMenu();
   });
 
   window.addEventListener('gestureend', (event) => {

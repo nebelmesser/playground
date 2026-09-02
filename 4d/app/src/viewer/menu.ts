@@ -32,6 +32,12 @@ function isCompactLayout(): boolean {
 
 export type SyncObjectUi = (mesh: Mesh3D | null) => void;
 
+let hideMenu: (() => void) | null = null;
+
+export function closeMenu(): void {
+  hideMenu?.();
+}
+
 export function bindMenu(
   controls: ViewerControls,
   onObjectChange: (id: ObjectId) => void,
@@ -82,6 +88,8 @@ export function bindMenu(
     menuBackdrop.classList.toggle('is-on', open);
     menuToggle.setAttribute('aria-expanded', String(open));
   }
+
+  hideMenu = () => setMenuOpen(false);
 
   function setViewMode(mode: ViewMode): void {
     controls.viewMode = mode;
