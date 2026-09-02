@@ -123,7 +123,7 @@ function renderEye(left: boolean, viewCamera: PerspectiveCamera): void {
   const inward = 1 - controls.stereoGap;
   const proj = viewCamera.projectionMatrix.elements;
   const saved = proj[8];
-  proj[8] = saved + (left ? -1 : 1) * inward;
+  proj[8] = saved + (left ? -1 : 1) * inward * 0.55;
   renderer.setScissor(x, 0, pane, height);
   renderer.setViewport(x, 0, pane, height);
   renderer.render(scene, viewCamera);
