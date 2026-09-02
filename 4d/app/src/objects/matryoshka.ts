@@ -8,6 +8,7 @@ import {
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { MATRYOSHKA_MESH_SCALE } from '../math/constants';
 import type { Mesh3D } from '../math/types';
 import { finishMesh, normalizePositions, dropInwardTriangles } from './mesh3d';
 
@@ -68,6 +69,9 @@ export async function loadMatryoshkaMesh(): Promise<Mesh3D> {
 
   const positions = attrArray(positionAttr, 3);
   normalizePositions(positions);
+  for (let i = 0; i < positions.length; i++) {
+    positions[i] *= MATRYOSHKA_MESH_SCALE;
+  }
 
   const rawIndex = merged.index
     ? Uint32Array.from(merged.index.array as ArrayLike<number>)

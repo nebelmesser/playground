@@ -10,8 +10,16 @@ export const DEFAULT_ANGLES: Angles = {
 };
 
 export function defaultSliceCount(id: ObjectId): number {
-  return id === 'matryoshka' ? 4 : 0;
+  return id === 'matryoshka' ? 1 : 0;
 }
+
+export function defaultObjectSize(id: ObjectId): number {
+  return 1;
+}
+
+export const MATRYOSHKA_MESH_SCALE = 1.2;
+
+export const DEFAULT_STEREO_DISTANCE = 0.5;
 
 export const DRAG_SENSITIVITY = 0.008;
 export const WHEEL_SENSITIVITY = 0.0015;

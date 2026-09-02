@@ -6,15 +6,16 @@ import {
   StereoCamera,
   WebGLRenderer,
 } from 'three';
-import { DEFAULT_ANGLES, DEFAULT_OPACITY, defaultSliceCount } from './math/constants';
-import type { TransformContext } from './math/types';
-import { loadObject } from './objects/catalog';
+import { DEFAULT_ANGLES, DEFAULT_OPACITY, DEFAULT_STEREO_DISTANCE, defaultObjectSize, defaultSliceCount } from './math/constants';
+import type { ObjectId, TransformContext } from './math/types';
+import { CATALOG, loadObject } from './objects/catalog';
 import { HyperView } from './objects/hyperView';
 import { bindAngleHud } from './viewer/angleHud';
 import { SceneAxes } from './viewer/sceneAxes';
 import {
   deviceOrbit,
   needsMotionPermission,
+  resetDeviceOrbit,
   startDeviceOrbitListeners,
   tickDeviceOrbit,
   deviceTiltOn,
@@ -22,19 +23,25 @@ import {
 import { bindInput } from './viewer/input';
 import { bindMenu, type ViewerControls } from './viewer/menu';
 
+function objectFromQuery(): ObjectId {
+  const raw = new URLSearchParams(window.location.search).get('object')?.trim().toLowerCase();
+  return CATALOG.some((entry) => entry.id === raw) ? raw as ObjectId : 'tesseract';
+}
+
 const angles = { ...DEFAULT_ANGLES };
+const initialObject = objectFromQuery();
 
 const controls: ViewerControls = {
   viewMode: 'cross',
-  objectSize: 1,
+  objectSize: defaultObjectSize(initialObject),
   eyeSep: 1,
-  stereoGap: 1,
+  stereoGap: DEFAULT_STEREO_DISTANCE,
   projectionDistance: 3,
-  objectId: 'tesseract',
+  objectId: initialObject,
   display: {
     fillCaps: true,
     showCage: false,
-    sliceCount: defaultSliceCount('tesseract'),
+    sliceCount: defaultSliceCount(initialObject),
     meshOpacity: DEFAULT_OPACITY,
   },
 };
@@ -95,7 +102,7 @@ function applyCameraAspect(): void {
   const aspect = Math.max(0.08, stereo ? pane / height : width / height);
   camera.fov = 55;
   camera.aspect = aspect;
-  const modelR = hyperView.projectedRadius(transformCtx());
+  const modelR = hyperView.extentRadius(transformCtx());
   const radius = Math.max(modelR, SceneAxes.layout(modelR).reach) * 1.12 / controls.objectSize;
   const vHalf = Math.tan(MathUtils.degToRad(camera.fov * 0.5));
   const hHalf = vHalf * aspect;
@@ -117,13 +124,20 @@ function onResize(): void {
   applyCameraAspect();
 }
 
-function renderEye(left: boolean, viewCamera: PerspectiveCamera): void {
+function maxInwardShift(halfW: number): number {
+  const vHalf = Math.tan(MathUtils.degToRad(camera.fov * 0.5));
+  const worldHalfW = Math.abs(camera.position.z) * vHalf * camera.aspect;
+  const ndcHalf = Math.min(0.95, halfW / Math.max(1e-6, worldHalfW));
+  return Math.max(0, 1 - ndcHalf - 0.02);
+}
+
+function renderEye(left: boolean, viewCamera: PerspectiveCamera, halfW: number): void {
   const { height, pane } = stereoLayout();
   const x = left ? 0 : pane;
-  const inward = 1 - controls.stereoGap;
+  const inward = (1 - controls.stereoGap) * maxInwardShift(halfW);
   const proj = viewCamera.projectionMatrix.elements;
   const saved = proj[8];
-  proj[8] = saved + (left ? -1 : 1) * inward * 0.55;
+  proj[8] = saved + (left ? -1 : 1) * inward;
   renderer.setScissor(x, 0, pane, height);
   renderer.setViewport(x, 0, pane, height);
   renderer.render(scene, viewCamera);
@@ -133,10 +147,11 @@ function renderEye(left: boolean, viewCamera: PerspectiveCamera): void {
 function renderFrame(): void {
   const ctx = transformCtx();
   hyperView.update(ctx, controls.display);
-  const modelR = hyperView.projectedRadius(ctx);
+  const modelR = hyperView.extentRadius(ctx);
   sceneAxes.update(ctx, modelR);
   applyCameraAspect();
   hyperView.setDepthFade(camera.position.z, modelR, controls.display.meshOpacity);
+  const halfW = hyperView.projectedHalfWidth(ctx);
   renderer.clear();
   camera.focus = camera.position.z;
 
@@ -153,11 +168,11 @@ function renderFrame(): void {
 
   renderer.setScissorTest(true);
   if (controls.viewMode === 'cross') {
-    renderEye(true, stereoCamera.cameraR);
-    renderEye(false, stereoCamera.cameraL);
+    renderEye(true, stereoCamera.cameraR, halfW);
+    renderEye(false, stereoCamera.cameraL, halfW);
   } else {
-    renderEye(true, stereoCamera.cameraL);
-    renderEye(false, stereoCamera.cameraR);
+    renderEye(true, stereoCamera.cameraL, halfW);
+    renderEye(false, stereoCamera.cameraR, halfW);
   }
   renderer.setScissorTest(false);
 }
@@ -173,11 +188,17 @@ let loading = false;
 
 async function setObject(id: ViewerControls['objectId']): Promise<void> {
   if (loading) return;
+  const switched = id !== controls.objectId;
   loading = true;
   controls.objectId = id;
+  if (switched) {
+    Object.assign(angles, DEFAULT_ANGLES);
+    resetDeviceOrbit();
+  }
   try {
     const mesh = await loadObject(id);
     controls.display.sliceCount = defaultSliceCount(id);
+    controls.objectSize = defaultObjectSize(id);
     hyperView.setMesh(mesh, controls.display);
     syncObjectUi(mesh);
   } catch (err) {
@@ -203,4 +224,4 @@ if (deviceTiltOn() && !needsMotionPermission()) startDeviceOrbitListeners();
 
 onResize();
 requestAnimationFrame(animate);
-void setObject('tesseract');
+void setObject(initialObject);

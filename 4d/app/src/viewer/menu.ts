@@ -65,6 +65,7 @@ export function bindMenu(
   }
   const hint = stereoHint;
   const sliceLabel = sliceCountValue;
+  const sizeLabel = sizeValue;
 
   objectSelect.replaceChildren();
   for (const entry of CATALOG) {
@@ -130,6 +131,8 @@ export function bindMenu(
     if (!mesh) return;
     objectSelect.value = mesh.id;
     if (objectCredit) objectCredit.hidden = mesh.id !== 'matryoshka';
+    sizeSlider.value = String(controls.objectSize);
+    sizeLabel.textContent = formatNum(controls.objectSize);
     syncSliceUi();
   }
 
@@ -180,7 +183,7 @@ export function bindMenu(
 
   sizeSlider.addEventListener('input', () => {
     controls.objectSize = Number(sizeSlider.value);
-    sizeValue.textContent = formatNum(controls.objectSize);
+    sizeLabel.textContent = formatNum(controls.objectSize);
   });
 
   opacitySlider.addEventListener('input', () => {
@@ -215,6 +218,8 @@ export function bindMenu(
   opacityValue.textContent = formatNum(DEFAULT_OPACITY);
   stereoGapSlider.value = String(controls.stereoGap);
   stereoGapValue.textContent = formatNum(controls.stereoGap);
+  sizeSlider.value = String(controls.objectSize);
+  sizeLabel.textContent = formatNum(controls.objectSize);
   syncSliceUi();
 
   setMenuOpen(!isCompactLayout());

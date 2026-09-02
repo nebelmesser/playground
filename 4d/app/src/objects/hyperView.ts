@@ -16,8 +16,8 @@ import {
   type Texture,
 } from 'three';
 import { colorForObjectW, colorToHex, lerpColor } from '../math/color';
-import { CUBE_EDGES, MAX_SLICES } from '../math/constants';
-import { transform4, transform4Into } from '../math/transform';
+import { CUBE_EDGES, MATRYOSHKA_MESH_SCALE, MAX_SLICES } from '../math/constants';
+import { rotate3Into, transform4, transform4Into } from '../math/transform';
 import type { DisplayState, Mesh3D, TransformContext, Vec3 } from '../math/types';
 import { attachDepthFade, setDepthFade, type DepthFade } from '../viewer/depthFade';
 
@@ -218,6 +218,34 @@ export class HyperView {
       }
     }
     return maxR;
+  }
+
+  extentRadius(ctx: TransformContext): number {
+    const mesh = this.mesh;
+    if (!mesh) return 0.35;
+    let maxR = 0.35;
+    for (const w of [-1, 1]) {
+      for (let i = 0; i < mesh.vertexCount; i++) {
+        const o = i * 3;
+        rotate3Into(mesh.positions[o], mesh.positions[o + 1], mesh.positions[o + 2], w, ctx, scratch);
+        maxR = Math.max(maxR, Math.hypot(scratch[0], scratch[1], scratch[2]));
+      }
+    }
+    return mesh.id === 'matryoshka' ? maxR / MATRYOSHKA_MESH_SCALE : maxR;
+  }
+
+  projectedHalfWidth(ctx: TransformContext): number {
+    const mesh = this.mesh;
+    if (!mesh) return 0.2;
+    let maxX = 0.2;
+    for (const w of [-1, 1]) {
+      for (let i = 0; i < mesh.vertexCount; i++) {
+        const o = i * 3;
+        transform4Into(mesh.positions[o], mesh.positions[o + 1], mesh.positions[o + 2], w, ctx, scratch);
+        maxX = Math.max(maxX, Math.abs(scratch[0]));
+      }
+    }
+    return maxX;
   }
 
   update(ctx: TransformContext, display: DisplayState): void {

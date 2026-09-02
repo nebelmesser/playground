@@ -1,6 +1,6 @@
 import { DEFAULT_ANGLES } from '../math/constants';
 import type { Angles } from '../math/types';
-import { resetDeviceOrbit } from './deviceOrbit';
+import { deviceOrbit, resetDeviceOrbit } from './deviceOrbit';
 
 const STEP = Math.PI / 90;
 const HOLD_DELAY_MS = 380;
@@ -33,9 +33,24 @@ export function bindAngleHud(angles: Angles): { sync: () => void } {
     values.set(key, valueEl);
   }
 
+  function displayedAngle(key: keyof Angles): number {
+    const base = angles[key];
+    const { mode, xz, yz } = deviceOrbit;
+    if (mode === 'xyz') {
+      if (key === 'xz') return base + xz;
+      if (key === 'yz') return base + yz;
+    } else if (mode === 'xw-yw') {
+      if (key === 'xw') return base + xz;
+      if (key === 'yw') return base + yz;
+    } else if (mode === 'zw' && key === 'zw') {
+      return base + yz;
+    }
+    return base;
+  }
+
   function sync(): void {
     for (const [key, el] of values) {
-      el.textContent = formatDeg(angles[key]);
+      el.textContent = formatDeg(displayedAngle(key));
     }
   }
 

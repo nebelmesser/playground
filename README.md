@@ -2,8 +2,8 @@
 <img style="border: none; box-shadow: none" src="assets/fire-under-construction-animation.gif" />
 </center>
 
-## 4D Viewer
-[![4D Viewer](4d/img/preview.png)](4d/viewer.html)
+## 4D Stereo Viewer
+[![4D Viewer](4d/img/tesseract.png)](4d/viewer.html)
 
 ## Hilbert Clock
 [![Hilbert Clock](hilbert/img/screen.png)](hilbert/)

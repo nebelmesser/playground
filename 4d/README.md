@@ -1,8 +1,10 @@
-# 4D Viewer
+# 4D Stereo Viewer
 
-[![4D Viewer](https://nebelmesser.com/4d/img/preview.png)](https://nebelmesser.com/4d/viewer.html)
+[![4D Stereo Viewer w Matryoshka](/4d/img/matryoshka.png)](/4d/viewer.html?object=matryoshka)
 
-A 4D viewer. Open the [live page](https://nebelmesser.com/4d/viewer.html)
+[![4D Viewer w. Tesseract](/4d/img/tesseract.png)](/4d/viewer.html?object=tesseract)
+
+A 4D viewer. Open the [live page](/4d/viewer.html)
 or the local `4d/viewer.html`.
 
 A tesseract is two ordinary cubes sitting at W = −1 and W = +1, with matching
