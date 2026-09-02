@@ -119,13 +119,15 @@ function onResize(): void {
 
 function renderEye(left: boolean, viewCamera: PerspectiveCamera): void {
   const { height, pane } = stereoLayout();
+  const x = left ? 0 : pane;
   const inward = 1 - controls.stereoGap;
-  const shift = inward * pane * 0.5;
-  const scissorX = left ? 0 : pane;
-  const viewX = left ? scissorX + shift : scissorX - shift;
-  renderer.setScissor(scissorX, 0, pane, height);
-  renderer.setViewport(viewX, 0, pane, height);
+  const proj = viewCamera.projectionMatrix.elements;
+  const saved = proj[8];
+  proj[8] = saved + (left ? -1 : 1) * inward;
+  renderer.setScissor(x, 0, pane, height);
+  renderer.setViewport(x, 0, pane, height);
   renderer.render(scene, viewCamera);
+  proj[8] = saved;
 }
 
 function renderFrame(): void {
