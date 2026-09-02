@@ -11,6 +11,7 @@ webrick:
 exclude:
   - 4d/app
   - 4d/matryoshka-doll
+  - hilbert/app
   - node_modules/
   - vendor/bundle/
   - vendor/cache/

@@ -14,6 +14,7 @@ bin/serve
 
 node_modules/
 4d/app/node_modules/
+hilbert/app/node_modules/
 .certs/
 
 # Source kit, the site uses 4d/models/matryoshka.glb
@@ -24,3 +25,5 @@ node_modules/
 4d/assets/viewer-*.css
 4d/assets/tesseract-*.js
 4d/assets/tesseract-*.css
+hilbert/assets/clock-*.js
+hilbert/assets/clock-*.css
