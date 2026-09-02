@@ -15,4 +15,4 @@ My video made with [dp_map](https://github.com/nebelmesser/dp_map)
 
 
 ## Links
- [meme channel](https://t.me/s/nitschego) • [instagram](https://instagram.com/nebelmesser) • [youtube](https://youtube.com/der.nebelmesser) • [email](mailto:der.nebelmesser@gmail.com)
+ [meme channel](https://t.me/s/nitschego)  • [flickr](https://flickr.com/photos/street_happens)  • [instagram](https://instagram.com/nebelmesser) • [youtube](https://www.youtube.com/@Nebelmesser) • [email](mailto:der.nebelmesser@gmail.com)
