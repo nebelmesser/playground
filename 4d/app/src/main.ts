@@ -28,6 +28,7 @@ const controls: ViewerControls = {
   viewMode: 'cross',
   objectSize: 1,
   eyeSep: 1,
+  stereoGap: 1,
   projectionDistance: 3,
   objectId: 'tesseract',
   display: {
@@ -80,10 +81,18 @@ function viewSize() {
   };
 }
 
+function stereoLayout() {
+  const { width, height } = viewSize();
+  const pane = Math.max(1, width / 2);
+  return { width, height, pane };
+}
+
 function applyCameraAspect(): void {
   const stereo = controls.viewMode !== 'mono';
-  const { width, height } = viewSize();
-  const aspect = Math.max(0.08, stereo ? (width / 2) / height : width / height);
+  const { width, height, pane } = stereoLayout();
+  const split = document.getElementById('stereo-split');
+  if (split) split.style.left = `${pane}px`;
+  const aspect = Math.max(0.08, stereo ? pane / height : width / height);
   camera.fov = 55;
   camera.aspect = aspect;
   const modelR = hyperView.projectedRadius(transformCtx());
@@ -109,10 +118,13 @@ function onResize(): void {
 }
 
 function renderEye(left: boolean, viewCamera: PerspectiveCamera): void {
-  const { width, height } = viewSize();
-  const x = left ? 0 : width / 2;
-  renderer.setScissor(x, 0, width / 2, height);
-  renderer.setViewport(x, 0, width / 2, height);
+  const { height, pane } = stereoLayout();
+  const inward = 1 - controls.stereoGap;
+  const shift = inward * pane * 0.5;
+  const scissorX = left ? 0 : pane;
+  const viewX = left ? scissorX + shift : scissorX - shift;
+  renderer.setScissor(scissorX, 0, pane, height);
+  renderer.setViewport(viewX, 0, pane, height);
   renderer.render(scene, viewCamera);
 }
 

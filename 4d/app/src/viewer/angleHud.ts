@@ -5,7 +5,7 @@ import { resetDeviceOrbit } from './deviceOrbit';
 const STEP = Math.PI / 90;
 const HOLD_DELAY_MS = 380;
 const HOLD_EVERY_MS = 45;
-const PLANES: Array<keyof Angles> = ['xy', 'xz', 'yz', 'xw', 'yw', 'zw'];
+const PLANES: Array<keyof Angles> = ['xz', 'yz', 'xw', 'yw', 'zw'];
 
 function isPlane(value: string | undefined): value is keyof Angles {
   return Boolean(value && (PLANES as string[]).includes(value));

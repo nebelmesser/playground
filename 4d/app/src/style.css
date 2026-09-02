@@ -159,6 +159,30 @@ canvas.main-view.is-dragging {
     outline: 1px solid #7ab8ff;
 }
 
+.credit {
+    margin: -4px 0 12px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: #999;
+}
+
+.credit[hidden] {
+    display: none;
+}
+
+.credit a {
+    color: #7ab8ff;
+    text-decoration: none;
+}
+
+.credit a:hover {
+    text-decoration: underline;
+}
+
+body.is-mono .stereo-only {
+    display: none;
+}
+
 .slider-ticks {
     display: flex;
     justify-content: space-between;

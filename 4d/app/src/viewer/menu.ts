@@ -16,6 +16,7 @@ export type ViewerControls = {
   viewMode: ViewMode;
   objectSize: number;
   eyeSep: number;
+  stereoGap: number;
   projectionDistance: number;
   objectId: ObjectId;
   display: DisplayState;
@@ -37,10 +38,12 @@ export function bindMenu(
 ): SyncObjectUi {
   const stereoHint = document.getElementById('stereoHint');
   const eyeSepSlider = document.getElementById('eyeSepSlider') as HTMLInputElement;
+  const stereoGapSlider = document.getElementById('stereoGapSlider') as HTMLInputElement;
   const focusSlider = document.getElementById('focusSlider') as HTMLInputElement;
   const sizeSlider = document.getElementById('cubeSizeSlider') as HTMLInputElement;
   const opacitySlider = document.getElementById('opacitySlider') as HTMLInputElement;
   const eyeSepValue = document.getElementById('eyeSepValue');
+  const stereoGapValue = document.getElementById('stereoGapValue');
   const focusValue = document.getElementById('focusValue');
   const sizeValue = document.getElementById('cubeSizeValue');
   const opacityValue = document.getElementById('opacityValue');
@@ -55,8 +58,9 @@ export function bindMenu(
   const tiltInvert = document.getElementById('tiltInvert') as HTMLInputElement;
   const tiltInvertGroup = document.getElementById('tiltInvertGroup') as HTMLElement;
   const tiltBanner = document.getElementById('tilt-banner') as HTMLButtonElement | null;
+  const objectCredit = document.getElementById('objectCredit');
 
-  if (!stereoHint || !eyeSepValue || !focusValue || !sizeValue || !opacityValue || !sliceCountValue) {
+  if (!stereoHint || !eyeSepValue || !stereoGapValue || !focusValue || !sizeValue || !opacityValue || !sliceCountValue) {
     throw new Error('Menu DOM is incomplete');
   }
   const hint = stereoHint;
@@ -125,6 +129,7 @@ export function bindMenu(
   function syncObjectUi(mesh: Mesh3D | null): void {
     if (!mesh) return;
     objectSelect.value = mesh.id;
+    if (objectCredit) objectCredit.hidden = mesh.id !== 'matryoshka';
     syncSliceUi();
   }
 
@@ -188,6 +193,11 @@ export function bindMenu(
     eyeSepValue.textContent = formatNum(controls.eyeSep);
   });
 
+  stereoGapSlider.addEventListener('input', () => {
+    controls.stereoGap = Number(stereoGapSlider.value);
+    stereoGapValue.textContent = formatNum(controls.stereoGap);
+  });
+
   focusSlider.addEventListener('input', () => {
     controls.projectionDistance = Number(focusSlider.value);
     focusValue.textContent = formatNum(controls.projectionDistance);
@@ -203,6 +213,8 @@ export function bindMenu(
 
   opacitySlider.value = String(DEFAULT_OPACITY);
   opacityValue.textContent = formatNum(DEFAULT_OPACITY);
+  stereoGapSlider.value = String(controls.stereoGap);
+  stereoGapValue.textContent = formatNum(controls.stereoGap);
   syncSliceUi();
 
   setMenuOpen(!isCompactLayout());
