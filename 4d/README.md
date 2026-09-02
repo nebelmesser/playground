@@ -1,8 +1,8 @@
 # 4D Viewer
 
-[![4D Viewer](https://nebelmesser.com/4d/img/preview.png)](https://nebelmesser.com/4d/viewer.html)
+[![4D Viewer](https://nebelmesser.com/4d/img/preview.png)](https://nebelmesser.com/4d/tesseract.html)
 
-A single-file tesseract (4-cube) viewer. Open the [live page](https://nebelmesser.com/4d/viewer.html)
+A single-file tesseract (4-cube) viewer. Open the [live page](https://nebelmesser.com/4d/tesseract.html)
 or the local `4d/viewer.html`. It loads Three.js from a CDN; nothing else is required.
 
 A tesseract is two ordinary cubes sitting at W = −1 and W = +1, with matching
@@ -12,7 +12,8 @@ negative-W cube, red is the positive-W cube. Edges that cross W interpolate
 from one color to the other.
 
 The camera then looks at that 3D picture — either as a single view or as a
-stereo pair, so the 4D shape can be seen with depth.
+stereo pair, so the 4D shape can be seen with depth. Dolls and filled cubes
+are translucent so the W-axis (and the other copy) stays visible in stereo.
 
 ## Inspiration
 
@@ -30,7 +31,7 @@ The bar at the top picks the layout:
   through the screen as if into the distance.
 
 Stereo strength is the eye separation. The convergence plane sits on the
-object, so changing the slider should not make the cubes slide sideways.
+object, so changing the slider should not make the object slide sideways.
 
 ## Rotation
 
@@ -58,14 +59,22 @@ the two inputs do not fight. iOS asks for motion permission on the first tap.
 
 The hamburger opens the settings (always open on a wide desktop):
 
-- **Cube size** — how large the tesseract is in the frame.
+- **Object** — tesseract (cube extruded in W) or matryoshka (mesh extruded in W).
+- **Size** — how large the object is in the frame.
 - **Stereo strength** — eye separation (hidden in effect in Mono).
 - **Perspective** — 4D projection distance. Smaller values exaggerate how
-  much W stretches or shrinks the cubes; larger values flatten the projection
+  much W stretches or shrinks the copies; larger values flatten the projection
   toward an orthographic look.
-- **Fill W± cubes** — translucent faces on the two bounding cubes.
-- **W-axis slices** — extra wireframe cubes at even W values between −1 and
-  +1, colored on a blue→red ramp. **Slice count** is 2–16.
+- **Fill opacity** — density of the translucent W± copies.
+- **Fill W±** — translucent caps at W = −1 and W = +1 (cubes or dolls).
+- **Cage** — (mesh objects) a thinned wireframe of the 3D surface at both ends.
+- **W-axis slices** — extra copies at even W values between −1 and +1,
+  colored on a blue→red ramp. **Slice count** is 2–16. The tesseract draws
+  those as wire cubes; the matryoshka draws nested translucent dolls.
+
+W-edges (the “spokes” along the fourth axis) are always drawn. On the doll
+they are a sparse silhouette set, so they read in stereo without filling the
+view.
 
 ## Axes
 
