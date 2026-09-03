@@ -51,7 +51,8 @@ canvas.main-view.is-dragging {
     background: #161616;
 }
 
-#chrome-center button {
+#chrome-center #mode-bar button,
+#chrome-center #object-bar button {
     appearance: none;
     height: 42px;
     border: 0;
@@ -61,7 +62,8 @@ canvas.main-view.is-dragging {
     cursor: pointer;
 }
 
-#chrome-center button.is-active {
+#chrome-center #mode-bar button.is-active,
+#chrome-center #object-bar button.is-active {
     background: #332423;
     color: #cc9690;
 }
@@ -105,6 +107,172 @@ canvas.main-view.is-dragging {
 
 #tilt-banner[hidden] {
     display: none;
+}
+
+#camera-toggle {
+    position: relative;
+}
+
+#camera-toggle[hidden] {
+    display: none;
+}
+
+#parallax-banner {
+    appearance: none;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    background: #161616;
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: auto;
+}
+
+#parallax-banner svg {
+    width: 22px;
+    height: 22px;
+    display: block;
+}
+
+#camera-toggle.is-on #parallax-banner {
+    background: #332423;
+    color: #cc9690;
+}
+
+.camera-tip {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 7;
+    padding: 8px 14px;
+    border: 1px solid #444;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.78);
+    color: #fff;
+    font: 13px sans-serif;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    text-align: center;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.camera-tip small {
+    font-size: 11px;
+    color: #aaa;
+}
+
+#camera-toggle:not(.is-on):hover .camera-tip,
+#camera-toggle:not(.is-on):focus-within .camera-tip,
+#camera-toggle.is-tip-on .camera-tip {
+    display: flex;
+}
+
+#face-preview {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 5;
+    width: 168px;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #000;
+    touch-action: auto;
+}
+
+#face-preview[hidden] {
+    display: none;
+}
+
+.face-track-video {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.face-preview-video {
+    position: relative;
+}
+
+#face-preview canvas {
+    display: block;
+    width: 100%;
+    height: 126px;
+}
+
+#face-preview-close {
+    appearance: none;
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 1;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #ddd;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#face-preview-close svg {
+    width: 12px;
+    height: 12px;
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+}
+
+#face-preview-close:hover {
+    color: #fff;
+    background: rgba(0, 0, 0, 0.8);
+}
+
+.face-preview-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px 8px 4px;
+    border-top: 1px solid #2a2a2a;
+    background: #111;
+}
+
+.face-preview-sliders label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font: 11px sans-serif;
+    color: #ccc;
+}
+
+.face-preview-sliders .row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.face-preview-sliders input[type="range"] {
+    width: 100%;
+    margin: 0;
+    accent-color: #cc9690;
 }
 
 #ui-container {
@@ -255,6 +423,10 @@ body.is-mono .stereo-only {
     #tiltControls,
     #tilt-banner {
         display: none;
+    }
+
+    #chrome-center {
+        max-width: calc(100% - 64px);
     }
 
     .hint-phone {
@@ -462,6 +634,12 @@ body.is-mono #stereo-split {
 @media (max-width: 900px), (max-height: 520px) {
     #menu-backdrop.is-on {
         display: block;
+    }
+
+    #camera-toggle,
+    #face-preview,
+    .desktop-only {
+        display: none !important;
     }
 
     #chrome-center {

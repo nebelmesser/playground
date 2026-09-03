@@ -3,8 +3,8 @@ import { loadMatryoshkaMesh } from './matryoshka';
 import { createTesseractMesh } from './tesseract';
 
 export const CATALOG: Array<{ id: ObjectId; label: string }> = [
-  { id: 'tesseract', label: 'Tesseract' },
   { id: 'matryoshka', label: 'Matryoshka' },
+  { id: 'tesseract', label: 'Tesseract' },
 ];
 
 const cache = new Map<ObjectId, Mesh3D>();

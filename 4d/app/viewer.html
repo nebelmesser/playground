@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta http-equiv="Permissions-Policy" content="accelerometer=*, gyroscope=*, magnetometer=*">
+    <meta http-equiv="Permissions-Policy" content="accelerometer=*, gyroscope=*, magnetometer=*, camera=*">
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-5D8EGFYM3L"></script>
     <script>
@@ -31,31 +31,27 @@
 <body>
     <div id="menu-backdrop"></div>
     <div id="chrome-center">
+    <div id="camera-toggle" hidden>
+        <button type="button" id="parallax-banner" aria-label="Allow camera for head parallax">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2.4" y="6.4" width="13.2" height="11.2" rx="2"/>
+                    <path d="M15.6 10 L21.4 6.8 V17.2 L15.6 14 Z"/>
+                </g>
+            </svg>
+        </button>
+        <div class="camera-tip">
+            <span data-title>Allow camera for head parallax</span>
+            <small data-note>Camera feed is local only</small>
+        </div>
+    </div>
     <div id="mode-bar">
         <button type="button" data-mode="mono">Mono</button>
         <button type="button" data-mode="cross" class="is-active">Cross-eyed</button>
         <button type="button" data-mode="parallel">Parallel</button>
     </div>
     <div id="object-bar">
-        <button type="button" data-object="tesseract" aria-label="Tesseract" class="is-active">
-            <svg viewBox="0 0 64 64" aria-hidden="true">
-                <g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M32 9 L52.8 21 L52.8 45 L32 57 L11.2 45 L11.2 21 Z"/>
-                    <path d="M32 22.9 L40.7 28 L40.7 38 L32 43.1 L23.3 38 L23.3 28 Z"/>
-                    <path d="M32 33 L11.2 21"/>
-                    <path d="M32 33 L52.8 21"/>
-                    <path d="M32 43.1 L32 57"/>
-                    <path d="M32 9 L32 22.9"/>
-                    <path d="M52.8 21 L40.7 28"/>
-                    <path d="M52.8 45 L40.7 38"/>
-                    <path d="M11.2 21 L23.3 28"/>
-                    <path d="M11.2 45 L23.3 38"/>
-                    <path d="M32 33 L32 43.1" stroke-dasharray="3.2 3.2"/>
-                    <path d="M45.2 26.5 h6.2 M45.2 33 h6.2 M45.2 39.5 h6.2" stroke-width="2"/>
-                </g>
-            </svg>
-        </button>
-        <button type="button" data-object="matryoshka" aria-label="Matryoshka">
+        <button type="button" data-object="matryoshka" aria-label="Matryoshka" class="is-active">
             <svg viewBox="0 0 64 80" aria-hidden="true">
                 <g fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M32 4 C44 4 50 13 50 22 C50 28 46 31 43 33 C52 37 56 47 56 58 C56 70 45 76 32 76 C19 76 8 70 8 58 C8 47 12 37 21 33 C18 31 14 28 14 22 C14 13 20 4 32 4 Z"/>
@@ -95,12 +91,50 @@
                 </g>
             </svg>
         </button>
+        <button type="button" data-object="tesseract" aria-label="Tesseract">
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+                <g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M32 9 L52.8 21 L52.8 45 L32 57 L11.2 45 L11.2 21 Z"/>
+                    <path d="M32 22.9 L40.7 28 L40.7 38 L32 43.1 L23.3 38 L23.3 28 Z"/>
+                    <path d="M32 33 L11.2 21"/>
+                    <path d="M32 33 L52.8 21"/>
+                    <path d="M32 43.1 L32 57"/>
+                    <path d="M32 9 L32 22.9"/>
+                    <path d="M52.8 21 L40.7 28"/>
+                    <path d="M52.8 45 L40.7 38"/>
+                    <path d="M11.2 21 L23.3 28"/>
+                    <path d="M11.2 45 L23.3 38"/>
+                    <path d="M32 33 L32 43.1" stroke-dasharray="3.2 3.2"/>
+                    <path d="M45.2 26.5 h6.2 M45.2 33 h6.2 M45.2 39.5 h6.2" stroke-width="2"/>
+                </g>
+            </svg>
+        </button>
     </div>
     </div>
     <button type="button" id="menu-toggle" aria-label="Settings" aria-expanded="false">
         <span></span><span></span><span></span>
     </button>
     <button type="button" id="tilt-banner" hidden></button>
+    <div id="face-preview" hidden>
+        <div class="face-preview-video">
+            <canvas id="face-preview-canvas" width="336" height="252"></canvas>
+            <button type="button" id="face-preview-close" aria-label="Turn off camera">
+                <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M4 4 L12 12 M12 4 L4 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="face-preview-sliders">
+            <label>
+                <span class="row"><span>Pan</span><span id="parallaxPanValue">1.60</span></span>
+                <input type="range" id="parallaxPanSlider" min="0" max="4" step="0.01" value="1.60">
+            </label>
+            <label>
+                <span class="row"><span>Zoom</span><span id="parallaxZoomValue">1.00</span></span>
+                <input type="range" id="parallaxZoomSlider" min="0" max="2" step="0.01" value="1.00">
+            </label>
+        </div>
+    </div>
 
     <div id="ui-container">
         <p class="credit" id="objectCredit" hidden>

@@ -15,6 +15,8 @@ function isUiEvent(event: Event): boolean {
   return event.target instanceof Element && Boolean(
     event.target.closest('#ui-container')
     || event.target.closest('#chrome-center')
+    || event.target.closest('#camera-toggle')
+    || event.target.closest('#face-preview')
     || event.target.closest('#menu-toggle')
     || event.target.closest('#menu-backdrop')
     || event.target.closest('#axes-hud')

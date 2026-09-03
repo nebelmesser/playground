@@ -22,10 +22,11 @@ import {
 } from './viewer/deviceOrbit';
 import { bindInput } from './viewer/input';
 import { bindMenu, type ViewerControls } from './viewer/menu';
+import { applyFaceParallax, bindFaceParallax } from './viewer/faceParallax';
 
 function objectFromQuery(): ObjectId {
   const raw = new URLSearchParams(window.location.search).get('object')?.trim().toLowerCase();
-  return CATALOG.some((entry) => entry.id === raw) ? raw as ObjectId : 'tesseract';
+  return CATALOG.some((entry) => entry.id === raw) ? raw as ObjectId : 'matryoshka';
 }
 
 const angles = { ...DEFAULT_ANGLES };
@@ -150,6 +151,7 @@ function renderFrame(): void {
   const modelR = hyperView.extentRadius(ctx);
   sceneAxes.update(ctx, modelR);
   applyCameraAspect();
+  applyFaceParallax(camera, modelR);
   hyperView.setDepthFade(camera.position.z, modelR, controls.display.meshOpacity);
   const halfW = hyperView.projectedHalfWidth(ctx);
   renderer.clear();
@@ -217,6 +219,7 @@ const syncObjectUi = bindMenu(controls, (id) => {
 });
 
 bindInput(angles, renderer.domElement);
+bindFaceParallax();
 window.addEventListener('resize', onResize);
 window.visualViewport?.addEventListener('resize', onResize);
 
