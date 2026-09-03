@@ -3,10 +3,10 @@
 </center>
 
 ## 4D Stereo Viewer
-[![4D Viewer](4d/img/tesseract.png)](4d/viewer.html)
+[![4D Viewer](4d/img/matryoshka.png)](4d/viewer.html)
 
-## Hilbert Clock
-[![Hilbert Clock](hilbert/img/screen.png)](hilbert/)
+## Hilbert Fractal Clock
+[![Hilbert Fractal Clock](hilbert/img/screen.png)](hilbert/)
 
 ## Double Pendulum Fractal Zoom
 My video made with [dp_map](https://github.com/nebelmesser/dp_map)
