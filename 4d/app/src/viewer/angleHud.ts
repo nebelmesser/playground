@@ -1,7 +1,7 @@
 import { defaultAngles } from '../math/constants';
 import type { Angles, ObjectId } from '../math/types';
-import { nudgeAngle, resetAngleMotion, startHoldSpin, stopHoldSpin } from './angleMotion';
-import { deviceOrbit, resetDeviceOrbit } from './deviceOrbit';
+import { animateAnglesTo, nudgeAngle, startHoldSpin, stopHoldSpin } from './angleMotion';
+import { deviceOrbit } from './deviceOrbit';
 import { markPrefsDirty } from './prefs';
 
 const TAP_MS = 280;
@@ -100,9 +100,7 @@ export function bindAngleHud(angles: Angles, objectId: () => ObjectId): { sync: 
 
   document.getElementById('angle-reset')?.addEventListener('click', (event) => {
     event.stopPropagation();
-    resetAngleMotion();
-    Object.assign(angles, defaultAngles(objectId()));
-    resetDeviceOrbit();
+    animateAnglesTo(angles, defaultAngles(objectId()));
     sync();
     markPrefsDirty();
   });
