@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+# Local GitHub Pages preview: HTTPS on :4000, Jekyll on :4001.
+#   ./scripts/preview          start anything that is down, then print status
+#   ./scripts/preview status   print status only
+#   ./scripts/preview down     stop the stack
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+RUBY_BIN="/opt/homebrew/opt/ruby@3.3/bin"
+HTTPS_PORT="${HTTPS_PORT:-4000}"
+JEKYLL_PORT="${JEKYLL_PORT:-4001}"
+RUN_DIR="${ROOT}/.preview"
+JEKYLL_LOG="${RUN_DIR}/jekyll.log"
+HTTPS_LOG="${RUN_DIR}/https.log"
+CERT="${ROOT}/.certs/lan.crt"
+KEY="${ROOT}/.certs/lan.key"
+
+usage() {
+  cat <<EOF
+Usage: ./scripts/preview [status|up|down]
+
+  status   who is listening
+  up       start missing processes; no-op if already running
+  down     stop Jekyll :${JEKYLL_PORT} and HTTPS :${HTTPS_PORT}
+
+  ./scripts/preview          same as up, then status
+
+Preview: https://127.0.0.1:${HTTPS_PORT}/
+EOF
+}
+
+listen_pid() {
+  local port="$1"
+  lsof -nP -iTCP:"${port}" -sTCP:LISTEN -t 2>/dev/null | head -n 1 || true
+}
+
+print_status() {
+  local jp hp
+  jp="$(listen_pid "${JEKYLL_PORT}")"
+  hp="$(listen_pid "${HTTPS_PORT}")"
+  if [[ -n "${jp}" ]]; then
+    echo "jekyll  :${JEKYLL_PORT}  up    pid ${jp}"
+  else
+    echo "jekyll  :${JEKYLL_PORT}  down"
+  fi
+  if [[ -n "${hp}" ]]; then
+    echo "https   :${HTTPS_PORT}  up    pid ${hp}"
+  else
+    echo "https   :${HTTPS_PORT}  down"
+  fi
+  if [[ -n "${jp}" && -n "${hp}" ]]; then
+    echo "preview https://127.0.0.1:${HTTPS_PORT}/"
+  elif [[ -n "${jp}" ]]; then
+    echo "preview http://127.0.0.1:${JEKYLL_PORT}/  (HTTPS proxy is down)"
+  else
+    echo "preview down  — run: ./scripts/preview up"
+  fi
+}
+
+wait_port() {
+  local port="$1" name="$2" n=0
+  while [[ -z "$(listen_pid "${port}")" ]]; do
+    n=$((n + 1))
+    if (( n > 40 )); then
+      echo "${name} did not bind :${port}" >&2
+      return 1
+    fi
+    sleep 0.25
+  done
+}
+
+# Double-fork so the process survives the agent/tool shell exiting.
+daemonize() {
+  local log="$1"
+  shift
+  python3 - "${log}" "$@" <<'PY'
+import os, sys
+log, *cmd = sys.argv[1:]
+if os.fork() > 0:
+    os._exit(0)
+os.setsid()
+if os.fork() > 0:
+    os._exit(0)
+devnull = os.open(os.devnull, os.O_RDWR)
+os.dup2(devnull, 0)
+out = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+os.dup2(out, 1)
+os.dup2(out, 2)
+os.chdir(os.environ.get("PREVIEW_ROOT", os.getcwd()))
+os.execvp(cmd[0], cmd)
+PY
+}
+
+cmd_up() {
+  mkdir -p "${RUN_DIR}"
+  export PATH="${RUBY_BIN}:${PATH}"
+  export HTTPS_PORT JEKYLL_PORT
+  export PREVIEW_ROOT="${ROOT}"
+
+  if [[ -z "$(listen_pid "${JEKYLL_PORT}")" ]]; then
+    if [[ ! -x "${RUBY_BIN}/ruby" ]]; then
+      echo "Ruby 3.3 is missing. Install it with: brew install ruby@3.3" >&2
+      exit 1
+    fi
+    cd "${ROOT}"
+    if [[ ! -d vendor/bundle ]]; then
+      bundle config set --local path vendor/bundle
+      bundle install
+    fi
+    echo "starting jekyll :${JEKYLL_PORT}"
+    daemonize "${JEKYLL_LOG}" bundle exec jekyll serve --host 127.0.0.1 --port "${JEKYLL_PORT}" --baseurl=""
+    wait_port "${JEKYLL_PORT}" "jekyll"
+  fi
+
+  if [[ -z "$(listen_pid "${HTTPS_PORT}")" ]]; then
+    if [[ ! -f "${CERT}" || ! -f "${KEY}" ]]; then
+      echo "Missing TLS certs: ${CERT} and ${KEY}" >&2
+      exit 1
+    fi
+    echo "starting https :${HTTPS_PORT}"
+    daemonize "${HTTPS_LOG}" node "${ROOT}/scripts/https-lan.mjs"
+    wait_port "${HTTPS_PORT}" "https"
+  fi
+}
+
+cmd_down() {
+  local p
+  for p in "$(listen_pid "${HTTPS_PORT}")" "$(listen_pid "${JEKYLL_PORT}")"; do
+    if [[ -n "${p}" ]]; then
+      kill "${p}" 2>/dev/null || true
+    fi
+  done
+  sleep 0.3
+}
+
+cmd="${1:-up}"
+case "${cmd}" in
+  -h|--help|help) usage ;;
+  status) print_status ;;
+  up)
+    cmd_up
+    print_status
+    ;;
+  down)
+    cmd_down
+    print_status
+    ;;
+  *)
+    usage >&2
+    exit 1
+    ;;
+esac

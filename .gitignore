@@ -16,6 +16,7 @@ node_modules/
 4d/app/node_modules/
 hilbert/app/node_modules/
 .certs/
+.preview/
 
 # Source kit, the site uses 4d/models/matryoshka.glb
 4d/matryoshka-doll/
