@@ -12,7 +12,7 @@ import {
   PointsMaterial,
   CanvasTexture,
   SRGBColorSpace,
-  type Scene,
+  type Object3D,
   type Texture,
 } from 'three';
 import { colorForObjectW, colorToHex, lerpColor } from '../math/color';
@@ -94,7 +94,7 @@ export class HyperView {
   private readonly materials: MeshBasicMaterial[] = [];
   private readonly fades: DepthFade[] = [];
 
-  constructor(private readonly scene: Scene) {
+  constructor(private readonly parent: Object3D) {
     this.pointMap = makeCircleTexture();
   }
 
@@ -126,7 +126,7 @@ export class HyperView {
     this.capPos = new Mesh(makeGeo(), matPos);
     this.capNeg.renderOrder = 1;
     this.capPos.renderOrder = 1;
-    this.scene.add(this.capNeg, this.capPos);
+    this.parent.add(this.capNeg, this.capPos);
 
     this.sliceMeshes = [];
     if (mesh.kind === 'surface') {
@@ -137,7 +137,7 @@ export class HyperView {
         const slice = new Mesh(makeGeo(), mat);
         slice.renderOrder = 1;
         slice.visible = false;
-        this.scene.add(slice);
+        this.parent.add(slice);
         this.sliceMeshes.push(slice);
       }
     }
@@ -153,7 +153,7 @@ export class HyperView {
       new LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.95 }),
     );
     this.cage.renderOrder = 2;
-    this.scene.add(this.cage);
+    this.parent.add(this.cage);
 
     if (mesh.kind === 'polytope') {
       const spokeCount = mesh.wSpokes.length;
@@ -172,7 +172,7 @@ export class HyperView {
         }),
       );
       this.spokes.renderOrder = 3;
-      this.scene.add(this.spokes);
+      this.parent.add(this.spokes);
 
       const slicePositions = new Float32Array(MAX_SLICES * CUBE_EDGES.length * 6);
       const sliceColors = new Float32Array(MAX_SLICES * CUBE_EDGES.length * 6);
@@ -184,7 +184,7 @@ export class HyperView {
         new LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.7 }),
       );
       this.sliceLines.visible = false;
-      this.scene.add(this.sliceLines);
+      this.parent.add(this.sliceLines);
 
       const pointPositions = new Float32Array(16 * 3);
       const pointColors = new Float32Array(16 * 3);
@@ -202,7 +202,7 @@ export class HyperView {
           depthWrite: false,
         }),
       );
-      this.scene.add(this.points);
+      this.parent.add(this.points);
     }
   }
 
@@ -460,7 +460,7 @@ export class HyperView {
     ];
     for (const obj of objects) {
       if (!obj) continue;
-      this.scene.remove(obj);
+      this.parent.remove(obj);
       obj.geometry.dispose();
       const mat = obj.material;
       if (Array.isArray(mat)) {

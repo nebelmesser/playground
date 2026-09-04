@@ -1,4 +1,5 @@
 import type { PerspectiveCamera } from 'three';
+import { markPrefsDirty } from './prefs';
 
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm';
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite';
@@ -407,23 +408,25 @@ function bindStrengthSliders(): void {
   const zoomValue = document.getElementById('parallaxZoomValue');
   if (!panSlider || !zoomSlider || !panValue || !zoomValue) return;
 
-  const syncPan = (): void => {
+  const syncPan = (persist = true): void => {
     const value = Number(panSlider.value);
     setParallaxPan(value);
     panValue.textContent = formatNum(value);
+    if (persist) markPrefsDirty();
   };
-  const syncZoom = (): void => {
+  const syncZoom = (persist = true): void => {
     const value = Number(zoomSlider.value);
     setParallaxZoom(value);
     zoomValue.textContent = formatNum(value);
+    if (persist) markPrefsDirty();
   };
 
-  panSlider.value = String(DEFAULT_PARALLAX_PAN);
-  zoomSlider.value = String(DEFAULT_PARALLAX_ZOOM);
-  syncPan();
-  syncZoom();
-  panSlider.addEventListener('input', syncPan);
-  zoomSlider.addEventListener('input', syncZoom);
+  panSlider.value = String(panStrength);
+  zoomSlider.value = String(zoomStrength);
+  syncPan(false);
+  syncZoom(false);
+  panSlider.addEventListener('input', () => syncPan());
+  zoomSlider.addEventListener('input', () => syncZoom());
 }
 
 export function bindFaceParallax(): void {
@@ -461,6 +464,14 @@ export function applyFaceParallax(camera: PerspectiveCamera, radius: number): vo
   camera.position.z = baseZ * (1 + (track.z - 1) * zoomStrength);
   camera.lookAt(0, 0, 0);
   camera.focus = camera.position.z;
+}
+
+export function getParallaxPan(): number {
+  return panStrength;
+}
+
+export function getParallaxZoom(): number {
+  return zoomStrength;
 }
 
 export function setParallaxPan(value: number): void {

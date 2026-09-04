@@ -17,33 +17,23 @@ export function rotate4(
   let s: number;
   let r: [number, number];
 
-  if (orbit.mode === 'xyz') {
-    c = Math.cos(orbit.xz);
-    s = Math.sin(orbit.xz);
-    r = rotatePlane(x, z, c, s);
-    x = r[0];
-    z = r[1];
-    c = Math.cos(orbit.yz);
-    s = Math.sin(orbit.yz);
-    r = rotatePlane(y, z, c, s);
-    y = r[0];
-    z = r[1];
-  }
-
   c = Math.cos(angles.xy);
   s = Math.sin(angles.xy);
   r = rotatePlane(x, y, c, s);
   x = r[0];
   y = r[1];
 
-  c = Math.cos(angles.xz);
-  s = Math.sin(angles.xz);
+  const xz = angles.xz + (orbit.mode === 'xyz' ? orbit.xz : 0);
+  const yz = angles.yz + (orbit.mode === 'xyz' ? orbit.yz : 0);
+
+  c = Math.cos(xz);
+  s = Math.sin(xz);
   r = rotatePlane(x, z, c, s);
   x = r[0];
   z = r[1];
 
-  c = Math.cos(angles.yz);
-  s = Math.sin(angles.yz);
+  c = Math.cos(yz);
+  s = Math.sin(yz);
   r = rotatePlane(y, z, c, s);
   y = r[0];
   z = r[1];

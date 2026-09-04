@@ -1,9 +1,14 @@
 * { box-sizing: border-box; }
 
+input, textarea, select {
+    user-select: auto;
+    -webkit-user-select: auto;
+}
+
 html, body {
     margin: 0;
     overflow: hidden;
-    background-color: #111;
+    background-color: #000;
     color: white;
     font-family: Rubik, sans-serif;
     touch-action: none;
@@ -12,6 +17,10 @@ html, body {
     inset: 0;
     width: 100%;
     height: 100%;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
 canvas.main-view {
@@ -23,6 +32,9 @@ canvas.main-view {
     height: 100%;
     cursor: grab;
     touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
 }
 
 canvas.main-view.is-dragging {
@@ -90,7 +102,7 @@ canvas.main-view.is-dragging {
 
 #tilt-banner {
     position: absolute;
-    top: 56px;
+    top: 62px;
     left: 50%;
     transform: translateX(-50%);
     z-index: 3;
@@ -461,12 +473,30 @@ body.is-mono .stereo-only {
 
 #menu-toggle span {
     display: block;
+    position: relative;
     width: 18px;
     height: 2px;
     background: #fff;
     border-radius: 1px;
     transition: transform 0.15s ease, opacity 0.15s ease;
 }
+
+#menu-toggle span::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 0 1.5px #161616;
+    transform: translateY(-50%);
+    transition: opacity 0.12s ease;
+}
+
+#menu-toggle span:nth-child(1)::after { left: 10px; }
+#menu-toggle span:nth-child(2)::after { left: 2px; }
+#menu-toggle span:nth-child(3)::after { left: 8px; }
 
 #menu-toggle.is-open span:nth-child(1) {
     transform: translateY(7px) rotate(45deg);
@@ -478,6 +508,10 @@ body.is-mono .stereo-only {
 
 #menu-toggle.is-open span:nth-child(3) {
     transform: translateY(-7px) rotate(-45deg);
+}
+
+#menu-toggle.is-open span::after {
+    opacity: 0;
 }
 
 #menu-backdrop {
@@ -503,6 +537,7 @@ body.is-mono #stereo-split {
 }
 
 #axes-hud {
+    --dial-size: 80px;
     position: absolute;
     left: 50%;
     bottom: max(10px, env(safe-area-inset-bottom));
@@ -512,23 +547,16 @@ body.is-mono #stereo-split {
     background: none;
     border: 0;
     padding: 0;
-    width: min(780px, calc(100% - 16px));
+    width: min(580px, calc(100% - 16px));
     text-align: center;
 }
 
 .axis-bar {
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
-}
-
-.axis-angles {
     pointer-events: auto;
     display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    gap: 4px;
-    flex: 1;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 8px;
     touch-action: manipulation;
     user-select: none;
 }
@@ -537,14 +565,15 @@ body.is-mono #stereo-split {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
-    min-width: 0;
-    flex: 1;
+    gap: 5px;
+    width: var(--dial-size);
+    flex: 0 0 var(--dial-size);
 }
 
 .coord .gesture {
     font-size: 10px;
     line-height: 1.15;
+    min-height: 1.15em;
     color: #9aa;
     white-space: nowrap;
 }
@@ -553,8 +582,21 @@ body.is-mono #stereo-split {
     display: none;
 }
 
+.dial {
+    position: relative;
+    overflow: hidden;
+    width: var(--dial-size);
+    height: var(--dial-size);
+    border: 1px solid #555;
+    border-radius: 50%;
+    background: #161616;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .coord .name {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.02em;
     line-height: 1;
@@ -572,57 +614,99 @@ body.is-mono #stereo-split {
 .ax-w { color: #f5c542; }
 
 .coord .readout {
+    position: relative;
+    z-index: 1;
     display: flex;
+    flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 2px;
+    min-width: 0;
+    pointer-events: none;
 }
 
 .coord .value {
-    font-size: 12px;
+    font-size: 11px;
     font-variant-numeric: tabular-nums;
     color: #ddd;
-    min-width: 2.6em;
-    text-align: right;
     line-height: 1;
 }
 
-.coord .steppers {
-    display: flex;
-    flex-direction: column;
-}
-
-.coord button {
+.coord .dial > button {
     appearance: none;
-    width: 28px;
-    height: 22px;
+    position: absolute;
+    z-index: 0;
+    display: flex;
     padding: 0;
     border: 0;
     background: transparent;
     color: #bbb;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 11px;
     line-height: 1;
     touch-action: manipulation;
 }
 
-.coord button:hover,
-.coord button:active {
+.coord[data-axis="h"] .dial > button {
+    top: 0;
+    width: 50%;
+    height: 100%;
+    align-items: center;
+}
+
+.coord[data-axis="h"] .dial > button:first-of-type {
+    left: 0;
+    justify-content: flex-start;
+    padding-left: calc(var(--dial-size) * 0.14);
+}
+
+.coord[data-axis="h"] .dial > button:last-of-type {
+    right: 0;
+    justify-content: flex-end;
+    padding-right: calc(var(--dial-size) * 0.14);
+}
+
+.coord[data-axis="v"] .dial > button {
+    left: 0;
+    width: 100%;
+    height: 50%;
+    justify-content: center;
+}
+
+.coord[data-axis="v"] .dial > button:first-of-type {
+    top: 0;
+    align-items: flex-start;
+    padding-top: calc(var(--dial-size) * 0.12);
+}
+
+.coord[data-axis="v"] .dial > button:last-of-type {
+    bottom: 0;
+    align-items: flex-end;
+    padding-bottom: calc(var(--dial-size) * 0.12);
+}
+
+.coord .dial > button:hover,
+.coord .dial > button:active {
     color: #fff;
 }
 
 #angle-reset {
-    pointer-events: auto;
     appearance: none;
-    flex: 0 0 auto;
-    height: 42px;
-    padding: 0 12px;
-    border: 1px solid #555;
-    border-radius: 8px;
-    background: rgba(0, 0, 0, 0.45);
+    padding: 0;
     color: #ddd;
-    font: 12px sans-serif;
     cursor: pointer;
     touch-action: manipulation;
+}
+
+#angle-reset svg {
+    width: 22px;
+    height: 22px;
+    display: block;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 #angle-reset:hover,
@@ -648,9 +732,7 @@ body.is-mono #stereo-split {
     }
 
     #tilt-banner {
-        left: 10px;
-        transform: none;
-        max-width: calc(100% - 70px);
+        max-width: calc(100vw - 24px);
     }
 
     #mode-bar button {
@@ -659,8 +741,13 @@ body.is-mono #stereo-split {
     }
 
     #axes-hud {
+        --dial-size: min(72px, calc((100vw - 24px) / 6));
         bottom: max(6px, env(safe-area-inset-bottom));
         width: calc(100% - 12px);
+    }
+
+    .axis-bar {
+        gap: 4px;
     }
 
     .coord .g-desk {
@@ -677,23 +764,16 @@ body.is-mono #stereo-split {
 
     .coord .name,
     .coord .value {
+        font-size: 9px;
+    }
+
+    .coord .dial > button {
         font-size: 10px;
     }
 
-    .coord .value {
-        min-width: 2.2em;
-    }
-
-    .coord button {
-        width: 30px;
-        height: 22px;
-        font-size: 15px;
-    }
-
-    #angle-reset {
-        height: 38px;
-        padding: 0 8px;
-        font-size: 11px;
+    #angle-reset svg {
+        width: 18px;
+        height: 18px;
     }
 }
 

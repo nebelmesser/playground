@@ -47,7 +47,7 @@ export function forgetDevicePrev(): void {
 
 export function lockTiltAxis(): void {
   if (deviceOrbit.locked) return;
-  if (deviceOrbit.mode !== 'xw-yw' && deviceOrbit.mode !== 'zw') return;
+  if (deviceOrbit.mode === 'off') return;
   deviceOrbit.locked = true;
   deviceOrbit.targetXz = deviceOrbit.xz;
   deviceOrbit.targetYz = deviceOrbit.yz;
@@ -82,6 +82,10 @@ function screenAngleDeg(): number {
 function addDeviceOrbitDelta(dXz: number, dYz: number): void {
   let dx = dXz;
   let dy = dYz;
+  if (deviceOrbit.mode === 'xyz') {
+    dx = -dx;
+    dy = -dy;
+  }
   if (deviceOrbit.invert) {
     dx = -dx;
     dy = -dy;

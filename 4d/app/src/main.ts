@@ -1,12 +1,13 @@
 import './style.css';
 import {
   MathUtils,
+  Group,
   PerspectiveCamera,
   Scene,
   StereoCamera,
   WebGLRenderer,
 } from 'three';
-import { DEFAULT_ANGLES, DEFAULT_OPACITY, DEFAULT_STEREO_DISTANCE, defaultObjectSize, defaultSliceCount } from './math/constants';
+import { DEFAULT_OPACITY, DEFAULT_STEREO_DISTANCE, VIEW_OFFSET_Y, defaultAngles, defaultObjectSize, defaultSliceCount } from './math/constants';
 import type { ObjectId, TransformContext } from './math/types';
 import { CATALOG, loadObject } from './objects/catalog';
 import { HyperView } from './objects/hyperView';
@@ -16,36 +17,49 @@ import {
   deviceOrbit,
   needsMotionPermission,
   resetDeviceOrbit,
+  setTiltMode,
   startDeviceOrbitListeners,
   tickDeviceOrbit,
   deviceTiltOn,
 } from './viewer/deviceOrbit';
+import { resetAngleMotion, tickAngleMotion } from './viewer/angleMotion';
 import { bindInput } from './viewer/input';
 import { bindMenu, type ViewerControls } from './viewer/menu';
-import { applyFaceParallax, bindFaceParallax } from './viewer/faceParallax';
+import { applyFaceParallax, bindFaceParallax, getParallaxPan, getParallaxZoom, setParallaxPan, setParallaxZoom } from './viewer/faceParallax';
+import { bindPrefs, consumeResetQuery, loadPrefs, markPrefsDirty, type StoredPrefs } from './viewer/prefs';
 
-function objectFromQuery(): ObjectId {
+function objectFromQuery(): ObjectId | null {
   const raw = new URLSearchParams(window.location.search).get('object')?.trim().toLowerCase();
-  return CATALOG.some((entry) => entry.id === raw) ? raw as ObjectId : 'matryoshka';
+  return CATALOG.some((entry) => entry.id === raw) ? raw as ObjectId : null;
 }
 
-const angles = { ...DEFAULT_ANGLES };
-const initialObject = objectFromQuery();
+consumeResetQuery();
+const stored = loadPrefs();
+const queryObject = objectFromQuery();
+const initialObject = queryObject ?? stored?.objectId ?? 'matryoshka';
+const reusePose = Boolean(stored && (!queryObject || queryObject === stored.objectId));
+
+const angles = { ...(reusePose && stored?.angles ? stored.angles : defaultAngles(initialObject)) };
 
 const controls: ViewerControls = {
-  viewMode: 'cross',
-  objectSize: defaultObjectSize(initialObject),
-  eyeSep: 1,
-  stereoGap: DEFAULT_STEREO_DISTANCE,
-  projectionDistance: 3,
+  viewMode: stored?.viewMode ?? 'mono',
+  objectSize: reusePose && stored?.objectSize !== undefined ? stored.objectSize : defaultObjectSize(initialObject),
+  eyeSep: stored?.eyeSep ?? 1,
+  stereoGap: stored?.stereoGap ?? DEFAULT_STEREO_DISTANCE,
+  projectionDistance: stored?.projectionDistance ?? 3,
   objectId: initialObject,
   display: {
     fillCaps: true,
     showCage: false,
-    sliceCount: defaultSliceCount(initialObject),
-    meshOpacity: DEFAULT_OPACITY,
+    sliceCount: reusePose && stored?.sliceCount !== undefined ? stored.sliceCount : defaultSliceCount(initialObject),
+    meshOpacity: stored?.meshOpacity ?? DEFAULT_OPACITY,
   },
 };
+
+if (stored?.tiltMode) setTiltMode(stored.tiltMode);
+if (stored?.tiltInvert !== undefined) deviceOrbit.invert = stored.tiltInvert;
+if (stored?.parallaxPan !== undefined) setParallaxPan(stored.parallaxPan);
+if (stored?.parallaxZoom !== undefined) setParallaxZoom(stored.parallaxZoom);
 
 const scene = new Scene();
 
@@ -61,7 +75,7 @@ const renderer = new WebGLRenderer({
 });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(0x111111, 1);
+renderer.setClearColor(0x000000, 1);
 renderer.autoClear = false;
 renderer.domElement.classList.add('main-view');
 document.body.appendChild(renderer.domElement);
@@ -69,10 +83,12 @@ document.body.appendChild(renderer.domElement);
 const stereoCamera = new StereoCamera();
 stereoCamera.eyeSep = controls.eyeSep;
 
-const hyperView = new HyperView(scene);
+const stage = new Group();
+scene.add(stage);
+const hyperView = new HyperView(stage);
 const sceneAxes = new SceneAxes();
-scene.add(sceneAxes.group);
-const angleHud = bindAngleHud(angles);
+stage.add(sceneAxes.group);
+const angleHud = bindAngleHud(angles, () => controls.objectId);
 
 function transformCtx(): TransformContext {
   return {
@@ -152,6 +168,8 @@ function renderFrame(): void {
   sceneAxes.update(ctx, modelR);
   applyCameraAspect();
   applyFaceParallax(camera, modelR);
+  const radius = Math.max(modelR, SceneAxes.layout(modelR).reach) * 1.12 / controls.objectSize;
+  stage.position.y = VIEW_OFFSET_Y * radius;
   hyperView.setDepthFade(camera.position.z, modelR, controls.display.meshOpacity);
   const halfW = hyperView.projectedHalfWidth(ctx);
   renderer.clear();
@@ -179,8 +197,27 @@ function renderFrame(): void {
   renderer.setScissorTest(false);
 }
 
+function snapshotPrefs(): StoredPrefs {
+  return {
+    viewMode: controls.viewMode,
+    objectId: controls.objectId,
+    objectSize: controls.objectSize,
+    eyeSep: controls.eyeSep,
+    stereoGap: controls.stereoGap,
+    projectionDistance: controls.projectionDistance,
+    sliceCount: controls.display.sliceCount,
+    meshOpacity: controls.display.meshOpacity,
+    angles: { ...angles },
+    tiltMode: deviceOrbit.mode,
+    tiltInvert: deviceOrbit.invert,
+    parallaxPan: getParallaxPan(),
+    parallaxZoom: getParallaxZoom(),
+  };
+}
+
 function animate(): void {
   tickDeviceOrbit();
+  if (tickAngleMotion(angles)) markPrefsDirty();
   renderFrame();
   angleHud.sync();
   requestAnimationFrame(animate);
@@ -194,15 +231,17 @@ async function setObject(id: ViewerControls['objectId']): Promise<void> {
   loading = true;
   controls.objectId = id;
   if (switched) {
-    Object.assign(angles, DEFAULT_ANGLES);
+    resetAngleMotion();
+    Object.assign(angles, defaultAngles(id));
     resetDeviceOrbit();
+    controls.display.sliceCount = defaultSliceCount(id);
+    controls.objectSize = defaultObjectSize(id);
   }
   try {
     const mesh = await loadObject(id);
-    controls.display.sliceCount = defaultSliceCount(id);
-    controls.objectSize = defaultObjectSize(id);
     hyperView.setMesh(mesh, controls.display);
     syncObjectUi(mesh);
+    markPrefsDirty();
   } catch (err) {
     console.error(err);
     if (id !== 'tesseract') {
@@ -220,6 +259,7 @@ const syncObjectUi = bindMenu(controls, (id) => {
 
 bindInput(angles, renderer.domElement);
 bindFaceParallax();
+bindPrefs(snapshotPrefs);
 window.addEventListener('resize', onResize);
 window.visualViewport?.addEventListener('resize', onResize);
 

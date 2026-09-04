@@ -1,23 +1,35 @@
 import type { Angles, ObjectId } from './types';
 
-export const DEFAULT_ANGLES: Angles = {
-  xy: 0,
-  xz: -Math.PI / 2,
-  yz: 0,
-  xw: 0,
-  yw: 0,
-  zw: -Math.PI / 2,
-};
+function rad(deg: number): number {
+  return (deg * Math.PI) / 180;
+}
+
+export function defaultAngles(id: ObjectId): Angles {
+  if (id === 'tesseract') {
+    return { xy: 0, xz: rad(-80), yz: rad(-35), xw: 0, yw: 0, zw: rad(-90) };
+  }
+  return { xy: 0, xz: rad(-90), yz: rad(-25), xw: 0, yw: rad(6), zw: rad(-90) };
+}
 
 export function defaultSliceCount(id: ObjectId): number {
   return id === 'matryoshka' ? 1 : 0;
 }
 
+function isCompactLayout(): boolean {
+  return typeof window !== 'undefined'
+    && window.matchMedia('(max-width: 900px), (max-height: 520px)').matches;
+}
+
 export function defaultObjectSize(id: ObjectId): number {
+  if (id === 'matryoshka' && isCompactLayout()) return 1.5;
+  if (id === 'matryoshka' && !isCompactLayout()) return 0.8;
   return 1;
 }
 
 export const MATRYOSHKA_MESH_SCALE = 1.2;
+
+/** Lift the object and gimbal on the page, as a fraction of the fitted view radius. Positive = up. Camera stays put. */
+export const VIEW_OFFSET_Y: number = 0.2;
 
 export const DEFAULT_STEREO_DISTANCE = 0.5;
 

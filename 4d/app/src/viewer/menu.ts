@@ -1,4 +1,4 @@
-import { DEFAULT_OPACITY, MAX_SLICES } from '../math/constants';
+import { MAX_SLICES } from '../math/constants';
 import type { DisplayState, Mesh3D, ObjectId, TiltMode, ViewMode } from '../math/types';
 import { CATALOG } from '../objects/catalog';
 import {
@@ -11,6 +11,7 @@ import {
   setTiltMode,
   tiltNeedsHttps,
 } from './deviceOrbit';
+import { markPrefsDirty } from './prefs';
 
 export type ViewerControls = {
   viewMode: ViewMode;
@@ -101,6 +102,7 @@ export function bindMenu(
       : mode === 'parallel'
         ? 'Look through the screen, as if into the distance — left eye on the left image.'
         : 'Single view.';
+    markPrefsDirty();
   }
 
   function syncTiltBanner(): void {
@@ -178,40 +180,48 @@ export function bindMenu(
     setTiltMode(tiltModeSelect.value as TiltMode);
     syncTiltControls();
     void enableDeviceOrbit();
+    markPrefsDirty();
   });
 
   tiltInvert.addEventListener('change', () => {
     deviceOrbit.invert = tiltInvert.checked;
+    markPrefsDirty();
   });
 
   sliceCountSlider.addEventListener('input', () => {
     controls.display.sliceCount = Number(sliceCountSlider.value);
     sliceLabel.textContent = String(controls.display.sliceCount);
+    markPrefsDirty();
   });
 
   sizeSlider.addEventListener('input', () => {
     controls.objectSize = Number(sizeSlider.value);
     sizeLabel.textContent = formatNum(controls.objectSize);
+    markPrefsDirty();
   });
 
   opacitySlider.addEventListener('input', () => {
     controls.display.meshOpacity = Number(opacitySlider.value);
     opacityValue.textContent = formatNum(controls.display.meshOpacity);
+    markPrefsDirty();
   });
 
   eyeSepSlider.addEventListener('input', () => {
     controls.eyeSep = Number(eyeSepSlider.value);
     eyeSepValue.textContent = formatNum(controls.eyeSep);
+    markPrefsDirty();
   });
 
   stereoGapSlider.addEventListener('input', () => {
     controls.stereoGap = Number(stereoGapSlider.value);
     stereoGapValue.textContent = formatNum(controls.stereoGap);
+    markPrefsDirty();
   });
 
   focusSlider.addEventListener('input', () => {
     controls.projectionDistance = Number(focusSlider.value);
     focusValue.textContent = formatNum(controls.projectionDistance);
+    markPrefsDirty();
   });
 
   if (sliceTicks && sliceTicks.childElementCount === 0) {
@@ -222,10 +232,14 @@ export function bindMenu(
     }
   }
 
-  opacitySlider.value = String(DEFAULT_OPACITY);
-  opacityValue.textContent = formatNum(DEFAULT_OPACITY);
+  opacitySlider.value = String(controls.display.meshOpacity);
+  opacityValue.textContent = formatNum(controls.display.meshOpacity);
   stereoGapSlider.value = String(controls.stereoGap);
   stereoGapValue.textContent = formatNum(controls.stereoGap);
+  eyeSepSlider.value = String(controls.eyeSep);
+  eyeSepValue.textContent = formatNum(controls.eyeSep);
+  focusSlider.value = String(controls.projectionDistance);
+  focusValue.textContent = formatNum(controls.projectionDistance);
   sizeSlider.value = String(controls.objectSize);
   sizeLabel.textContent = formatNum(controls.objectSize);
   syncSliceUi();

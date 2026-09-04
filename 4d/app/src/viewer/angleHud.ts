@@ -1,10 +1,10 @@
-import { DEFAULT_ANGLES } from '../math/constants';
-import type { Angles } from '../math/types';
+import { defaultAngles } from '../math/constants';
+import type { Angles, ObjectId } from '../math/types';
+import { nudgeAngle, resetAngleMotion, startHoldSpin, stopHoldSpin } from './angleMotion';
 import { deviceOrbit, resetDeviceOrbit } from './deviceOrbit';
+import { markPrefsDirty } from './prefs';
 
-const STEP = Math.PI / 90;
-const HOLD_DELAY_MS = 380;
-const HOLD_EVERY_MS = 45;
+const TAP_MS = 280;
 const PLANES: Array<keyof Angles> = ['xz', 'yz', 'xw', 'yw', 'zw'];
 
 function isPlane(value: string | undefined): value is keyof Angles {
@@ -21,7 +21,7 @@ function formatDeg(radians: number): string {
   return `${deg}°`;
 }
 
-export function bindAngleHud(angles: Angles): { sync: () => void } {
+export function bindAngleHud(angles: Angles, objectId: () => ObjectId): { sync: () => void } {
   const root = document.getElementById('angleCoords');
   if (!root) throw new Error('#angleCoords missing');
 
@@ -55,7 +55,7 @@ export function bindAngleHud(angles: Angles): { sync: () => void } {
   }
 
   function nudge(key: keyof Angles, dir: number): void {
-    angles[key] += dir * STEP;
+    nudgeAngle(key, dir);
     sync();
   }
 
@@ -64,41 +64,47 @@ export function bindAngleHud(angles: Angles): { sync: () => void } {
     const key = coord?.dataset.plane;
     const dir = Number(button.dataset.dir);
     if (!isPlane(key) || !dir) continue;
+    const plane = key;
 
-    let holdTimer = 0;
-    let holdInterval = 0;
+    let pressed = false;
+    let pressedAt = 0;
 
-    function stopHold(): void {
-      window.clearTimeout(holdTimer);
-      window.clearInterval(holdInterval);
-      holdTimer = 0;
-      holdInterval = 0;
+    function endPress(): void {
+      if (!pressed) return;
+      const held = performance.now() - pressedAt;
+      pressed = false;
+      stopHoldSpin(plane);
+      if (held < TAP_MS) nudge(plane, dir);
     }
 
     button.addEventListener('pointerdown', (event) => {
       if (event.button !== 0 && event.pointerType === 'mouse') return;
       event.preventDefault();
-      nudge(key, dir);
-      stopHold();
-      holdTimer = window.setTimeout(() => {
-        holdInterval = window.setInterval(() => nudge(key, dir), HOLD_EVERY_MS);
-      }, HOLD_DELAY_MS);
+      if (pressed) {
+        pressed = false;
+        stopHoldSpin(plane);
+      }
+      pressed = true;
+      pressedAt = performance.now();
+      startHoldSpin(plane, dir);
       try {
         button.setPointerCapture(event.pointerId);
       } catch {
         /* ignore */
       }
     });
-    button.addEventListener('pointerup', stopHold);
-    button.addEventListener('pointercancel', stopHold);
-    button.addEventListener('lostpointercapture', stopHold);
+    button.addEventListener('pointerup', endPress);
+    button.addEventListener('pointercancel', endPress);
+    button.addEventListener('lostpointercapture', endPress);
   }
 
   document.getElementById('angle-reset')?.addEventListener('click', (event) => {
     event.stopPropagation();
-    Object.assign(angles, DEFAULT_ANGLES);
+    resetAngleMotion();
+    Object.assign(angles, defaultAngles(objectId()));
     resetDeviceOrbit();
     sync();
+    markPrefsDirty();
   });
 
   sync();
