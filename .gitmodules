@@ -1,0 +1,3 @@
+[submodule "hilbert"]
+	path = hilbert
+	url = https://github.com/nebelmesser/hilbert-fractal-watch.git
