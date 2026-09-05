@@ -1,3 +1,6 @@
 [submodule "hilbert"]
 	path = hilbert
 	url = https://github.com/nebelmesser/hilbert-fractal-clock.git
+[submodule "4d"]
+	path = 4d
+	url = https://github.com/nebelmesser/4d-viewer.git
