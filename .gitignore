@@ -15,6 +15,7 @@ bin/serve
 node_modules/
 4d/app/node_modules/
 hilbert/app/node_modules/
+fractal-explorer/app/node_modules/
 .certs/
 .preview/
 
