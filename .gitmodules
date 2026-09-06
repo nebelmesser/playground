@@ -4,6 +4,6 @@
 [submodule "4d"]
 	path = 4d
 	url = https://github.com/nebelmesser/4d-viewer.git
-[submodule "fractal-explorer"]
-	path = fractal-explorer
+[submodule "fractal"]
+	path = fractal
 	url = https://github.com/nebelmesser/fractal-explorer.git

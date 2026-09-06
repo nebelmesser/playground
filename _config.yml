@@ -12,7 +12,7 @@ exclude:
   - 4d/app
   - 4d/matryoshka-doll
   - hilbert/app
-  - fractal-explorer/app
+  - fractal/app
   - node_modules/
   - vendor/bundle/
   - vendor/cache/

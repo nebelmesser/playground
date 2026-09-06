@@ -17,6 +17,6 @@ Use **one** command. Do not start Jekyll, `python -m http.server`, `npx serve`, 
 
 After an edit, reload the HTTPS URL. Jekyll rebuilds on its own.
 
-## App source (`4d/app`, `hilbert/app`, `fractal-explorer/app`)
+## App source (`4d/app`, `hilbert/app`, `fractal/app`)
 
-`npm run dev` is only for Vite while editing TypeScript. People open the built files under `4d/`, `hilbert/`, and `fractal-explorer/` via **https://127.0.0.1:4000/**. After `npm run build`, reload that origin.
+`npm run dev` is only for Vite while editing TypeScript. People open the built files under `4d/`, `hilbert/`, and `fractal/` via **https://127.0.0.1:4000/**. After `npm run build`, reload that origin.
