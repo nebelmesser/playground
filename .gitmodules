@@ -7,3 +7,6 @@
 [submodule "fractal"]
 	path = fractal
 	url = https://github.com/nebelmesser/fractal-explorer.git
+[submodule "narration"]
+	path = narration
+	url = https://github.com/nebelmesser/narration.git
