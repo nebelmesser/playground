@@ -2,6 +2,10 @@
 <img style="border: none; box-shadow: none" src="assets/fire-under-construction-animation.gif" />
 </center>
 
+
+## Double Pendulum Fractal Explorer
+[![Double Pendulum Fractal Explorer](fractal/img/preview.jpg)](fractal/double-pendulum.html)
+
 ## 4D Stereo Viewer
 [![4D Viewer](4d/img/matryoshka.png)](4d/viewer.html)
 
