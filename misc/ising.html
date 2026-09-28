@@ -1,0 +1,963 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#090b10">
+  <meta name="description" content="An interactive Ising model showing domain evolution and coarse-graining across observation scales.">
+  <title>Ising Field — Emergence Across Scales</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --ink: #f3f0e8;
+      --muted: #999da8;
+      --hairline: rgba(255, 255, 255, 0.14);
+      --panel: rgba(13, 16, 23, 0.82);
+      --hot: #ff6b45;
+      --cold: #57a3ff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      background: #090b10;
+      color: var(--ink);
+    }
+
+    body {
+      overflow: hidden;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    canvas {
+      position: fixed;
+      inset: 0;
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: none;
+      touch-action: none;
+    }
+
+    .noise {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: var(--noise-opacity, 0.12);
+      mix-blend-mode: soft-light;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+    }
+
+    .panel {
+      position: fixed;
+      top: calc(clamp(14px, 3vw, 34px) + 54px);
+      right: clamp(14px, 3vw, 34px);
+      z-index: 2;
+      width: min(370px, calc(100vw - 28px));
+      max-height: calc(100vh - 100px);
+      overflow: auto;
+      padding: 20px;
+      border: 1px solid var(--hairline);
+      border-radius: 20px;
+      background: var(--panel);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.3);
+      -webkit-backdrop-filter: blur(22px) saturate(125%);
+      backdrop-filter: blur(22px) saturate(125%);
+      transition: opacity 160ms ease, transform 160ms ease, visibility 160ms;
+    }
+
+    .panel.is-closed {
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-8px) scale(0.98);
+    }
+
+    .settings-toggle {
+      position: fixed;
+      top: clamp(14px, 3vw, 34px);
+      right: clamp(14px, 3vw, 34px);
+      z-index: 3;
+      display: grid;
+      width: 44px;
+      height: 44px;
+      min-height: 44px;
+      padding: 0;
+      place-content: center;
+      gap: 5px;
+      border-radius: 14px;
+      background: rgba(13, 16, 23, 0.86);
+      -webkit-backdrop-filter: blur(18px);
+      backdrop-filter: blur(18px);
+    }
+
+    .settings-toggle span {
+      display: block;
+      width: 18px;
+      height: 1.5px;
+      border-radius: 2px;
+      background: currentColor;
+      transition: transform 160ms ease, opacity 160ms ease;
+    }
+
+    .settings-toggle[aria-expanded="true"] span:nth-child(1) {
+      transform: translateY(6.5px) rotate(45deg);
+    }
+
+    .settings-toggle[aria-expanded="true"] span:nth-child(2) {
+      opacity: 0;
+    }
+
+    .settings-toggle[aria-expanded="true"] span:nth-child(3) {
+      transform: translateY(-6.5px) rotate(-45deg);
+    }
+
+    .stat dt {
+      font-size: 10px;
+      font-weight: 650;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .panel-title {
+      margin: 0 0 14px;
+      font-size: 13px;
+      font-weight: 650;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .control {
+      padding: 13px 0 12px;
+      border-top: 1px solid var(--hairline);
+    }
+
+    .control-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 9px;
+    }
+
+    .control label {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .control output {
+      color: #d9d9dc;
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 20px;
+      margin: 0;
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 2px;
+      border-radius: 2px;
+      background: linear-gradient(90deg, var(--cold), #ece8de 50%, var(--hot));
+    }
+
+    #scale::-webkit-slider-runnable-track,
+    #brush-size::-webkit-slider-runnable-track {
+      background: linear-gradient(90deg, #ece8de, rgba(236, 232, 222, 0.22));
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      width: 16px;
+      height: 16px;
+      margin-top: -7px;
+      appearance: none;
+      border: 2px solid #11141a;
+      border-radius: 50%;
+      background: #f3f0e8;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.45);
+    }
+
+    input[type="range"]::-moz-range-track {
+      height: 2px;
+      border: 0;
+      background: #8e929b;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 13px;
+      height: 13px;
+      border: 2px solid #11141a;
+      border-radius: 50%;
+      background: #f3f0e8;
+    }
+
+    .scale-labels,
+    .temperature-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 1px;
+      color: #777c87;
+      font-size: 9px;
+      letter-spacing: 0.04em;
+    }
+
+    .temperature-labels span:nth-child(2) {
+      color: #dedbd3;
+    }
+
+    .explanation {
+      min-height: 54px;
+      margin: 1px 0 15px;
+      padding: 11px 12px;
+      border-left: 2px solid rgba(255, 255, 255, 0.48);
+      background: rgba(255, 255, 255, 0.045);
+      color: #bdc0c7;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      min-height: 36px;
+      padding: 0 14px;
+      border: 1px solid var(--hairline);
+      border-radius: 999px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.06);
+      cursor: pointer;
+      transition: background 140ms ease, transform 140ms ease;
+    }
+
+    button:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    button:active {
+      transform: scale(0.97);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin: 17px 0 0;
+    }
+
+    .stat {
+      min-width: 0;
+      margin: 0;
+    }
+
+    .stat dt {
+      overflow: hidden;
+      margin-bottom: 4px;
+      color: #737884;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .stat dd {
+      margin: 0;
+      color: #e6e3dc;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .legend {
+      position: fixed;
+      right: clamp(18px, 3vw, 40px);
+      bottom: max(20px, env(safe-area-inset-bottom));
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-shadow: 0 1px 12px black;
+    }
+
+    .legend i {
+      display: block;
+      width: 64px;
+      height: 5px;
+      border-radius: 5px;
+      background: linear-gradient(90deg, var(--cold), #151a23 50%, var(--hot));
+    }
+
+    .hint {
+      position: fixed;
+      left: clamp(18px, 3vw, 40px);
+      bottom: max(20px, env(safe-area-inset-bottom));
+      z-index: 1;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 11px;
+      text-shadow: 0 1px 12px black;
+    }
+
+    @media (max-width: 720px) {
+      .panel {
+        top: calc(max(12px, env(safe-area-inset-top)) + 54px);
+        right: 12px;
+        padding: 16px;
+        border-radius: 18px;
+      }
+
+      .settings-toggle {
+        top: max(12px, env(safe-area-inset-top));
+        right: 12px;
+      }
+
+      .control {
+        padding: 9px 0 8px;
+      }
+
+      .explanation {
+        min-height: 0;
+        margin-bottom: 10px;
+        padding: 8px 10px;
+      }
+
+      .stats {
+        margin-top: 12px;
+      }
+
+      .hint,
+      .legend {
+        display: none;
+      }
+    }
+
+    @media (max-height: 700px) and (max-width: 720px) {
+      .explanation,
+      .stats {
+        display: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      button {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <canvas id="field" aria-label="An evolving spin field in the two-dimensional Ising model"></canvas>
+    <div class="noise" aria-hidden="true"></div>
+
+    <button class="settings-toggle" id="settings-toggle" type="button" aria-expanded="true" aria-controls="settings-panel" aria-label="Close settings">
+      <span></span><span></span><span></span>
+    </button>
+
+    <section class="panel" id="settings-panel" aria-labelledby="settings-title">
+      <h1 class="panel-title" id="settings-title">Ising field settings</h1>
+
+      <div class="control">
+        <div class="control-head">
+          <label for="temperature">Temperature</label>
+          <output id="temperature-value" for="temperature">T = 2.27</output>
+        </div>
+        <input id="temperature" type="range" min="0.8" max="4.5" value="2.27" step="0.01">
+        <div class="temperature-labels" aria-hidden="true">
+          <span>order</span><span>Tc = 2.269</span><span>noise</span>
+        </div>
+      </div>
+
+      <div class="control">
+        <div class="control-head">
+          <label for="brush-size">Brush size</label>
+          <output id="brush-size-value" for="brush-size">48 spins</output>
+        </div>
+        <input id="brush-size" type="range" min="4" max="200" value="48" step="2">
+        <div class="scale-labels" aria-hidden="true">
+          <span>point</span><span>medium</span><span>wide</span>
+        </div>
+      </div>
+
+      <div class="control">
+        <div class="control-head">
+          <label for="scale">Observation scale</label>
+          <output id="scale-value" for="scale">1 spin</output>
+        </div>
+        <input id="scale" type="range" min="0" max="3" value="1.6" step="0.01">
+        <div class="scale-labels" aria-hidden="true">
+          <span>spins</span><span>domains</span><span>field</span>
+        </div>
+      </div>
+
+      <p class="explanation" id="explanation">The fine texture is the live spin lattice. Color and the bright contour show the collective shape seen above the single-spin scale.</p>
+
+      <div class="actions">
+        <button id="pause" type="button">Pause</button>
+        <button id="restart" type="button">New state</button>
+      </div>
+
+      <dl class="stats">
+        <div class="stat"><dt>phase</dt><dd id="phase">critical</dd></div>
+        <div class="stat"><dt>|magnetization|</dt><dd id="magnetization">0.000</dd></div>
+        <div class="stat"><dt>energy</dt><dd id="energy">0.000</dd></div>
+      </dl>
+    </section>
+
+    <div class="hint">Wheel: scale · circle: brush size</div>
+    <div class="legend"><span>−1</span><i></i><span>+1</span></div>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      function initialGridSize() {
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const fieldSize = viewportWidth > viewportHeight * 1.08
+          ? viewportHeight
+          : viewportWidth;
+        return Math.max(256, Math.round(fieldSize));
+      }
+
+      const SIZE = initialGridSize();
+      const COUNT = SIZE * SIZE;
+      const CRITICAL_TEMPERATURE = 2 / Math.log(1 + Math.sqrt(2));
+      const WARMUP_SWEEPS = SIZE > 800 ? 32 : 48;
+      const ATTEMPTS_PER_FRAME = Math.round(COUNT * 0.02);
+      const FRAME_INTERVAL = 1000 / (SIZE > 900 ? 20 : 24);
+      const DPR_CAP = 2;
+
+      const canvas = document.querySelector('#field');
+      const context = canvas.getContext('2d', { alpha: false });
+      const temperatureInput = document.querySelector('#temperature');
+      const scaleInput = document.querySelector('#scale');
+      const brushSizeInput = document.querySelector('#brush-size');
+      const temperatureValue = document.querySelector('#temperature-value');
+      const scaleValue = document.querySelector('#scale-value');
+      const brushSizeValue = document.querySelector('#brush-size-value');
+      const explanation = document.querySelector('#explanation');
+      const settingsToggle = document.querySelector('#settings-toggle');
+      const settingsPanel = document.querySelector('#settings-panel');
+      const pauseButton = document.querySelector('#pause');
+      const restartButton = document.querySelector('#restart');
+      const phaseValue = document.querySelector('#phase');
+      const magnetizationValue = document.querySelector('#magnetization');
+      const energyValue = document.querySelector('#energy');
+
+      const spins = new Int8Array(COUNT);
+      const horizontalAverage = new Float32Array(COUNT);
+      const observedField = new Float32Array(COUNT);
+      const secondaryField = new Float32Array(COUNT);
+      const palette = new Uint8ClampedArray(256 * 3);
+      const latticeCanvas = document.createElement('canvas');
+      const latticeContext = latticeCanvas.getContext('2d', { alpha: false });
+      const microCanvas = document.createElement('canvas');
+      const microContext = microCanvas.getContext('2d');
+      const contourCanvas = document.createElement('canvas');
+      const contourContext = contourCanvas.getContext('2d');
+      latticeCanvas.width = SIZE;
+      latticeCanvas.height = SIZE;
+      microCanvas.width = SIZE;
+      microCanvas.height = SIZE;
+      contourCanvas.width = SIZE;
+      contourCanvas.height = SIZE;
+      const latticeImage = latticeContext.createImageData(SIZE, SIZE);
+      const microImage = microContext.createImageData(SIZE, SIZE);
+      const contourImage = contourContext.createImageData(SIZE, SIZE);
+
+      let temperature = Number(temperatureInput.value);
+      let scaleLevel = Number(scaleInput.value);
+      let brushDiameter = Number(brushSizeInput.value);
+      let paused = false;
+      let frame = 0;
+      let previousFrameTime = 0;
+      let width = 0;
+      let height = 0;
+      let dpr = 1;
+      let fieldSide = 0;
+      let fieldX = 0;
+      let fieldY = 0;
+      let painting = false;
+      let paintSpin = 1;
+      let pointerX = 0;
+      let pointerY = 0;
+      let pointerInsideField = false;
+      let settingsOpen = true;
+      let randomState = seedFromClock();
+
+      const scaleCopy = [
+        {
+          text: 'Each point is one ±1 spin. The local rule is visible, but there is no independent large object yet.'
+        },
+        {
+          text: 'A small neighborhood is averaged at every point. Random flips cancel while aligned regions grow stronger.'
+        },
+        {
+          text: 'The bright line is the zero contour of the average spin. It moves like one boundary although the model contains only cells.'
+        },
+        {
+          text: 'A large-scale observer cannot see individual flips. Islands merge into a different, slower geometry.'
+        }
+      ];
+
+      function seedFromClock() {
+        const time = Date.now() >>> 0;
+        return (time ^ Math.imul(performance.now() * 1000, 2654435761)) >>> 0 || 0x9e3779b9;
+      }
+
+      function random() {
+        randomState ^= randomState << 13;
+        randomState ^= randomState >>> 17;
+        randomState ^= randomState << 5;
+        return (randomState >>> 0) / 4294967296;
+      }
+
+      function mix(a, b, amount) {
+        return Math.round(a + (b - a) * amount);
+      }
+
+      function buildPalette() {
+        const negative = [54, 156, 255];
+        const neutral = [19, 22, 31];
+        const positive = [255, 105, 61];
+
+        for (let index = 0; index < 256; index += 1) {
+          const value = index / 127.5 - 1;
+          const strength = Math.pow(Math.abs(value), 0.38);
+          const target = value < 0 ? negative : positive;
+          palette[index * 3] = mix(neutral[0], target[0], strength);
+          palette[index * 3 + 1] = mix(neutral[1], target[1], strength);
+          palette[index * 3 + 2] = mix(neutral[2], target[2], strength);
+        }
+      }
+
+      function initialize() {
+        randomState = seedFromClock();
+        for (let index = 0; index < COUNT; index += 1) {
+          spins[index] = random() < 0.5 ? -1 : 1;
+        }
+
+        for (let sweep = 0; sweep < WARMUP_SWEEPS; sweep += 1) {
+          metropolisSweep(COUNT);
+        }
+        updateStats();
+      }
+
+      function metropolisSweep(attempts) {
+        const probabilities = [
+          1,
+          Math.exp(-4 / temperature),
+          Math.exp(-8 / temperature)
+        ];
+
+        for (let attempt = 0; attempt < attempts; attempt += 1) {
+          const x = Math.floor(random() * SIZE);
+          const y = Math.floor(random() * SIZE);
+          const index = y * SIZE + x;
+          const spin = spins[index];
+          const left = y * SIZE + (x === 0 ? SIZE - 1 : x - 1);
+          const right = y * SIZE + (x === SIZE - 1 ? 0 : x + 1);
+          const up = (y === 0 ? SIZE - 1 : y - 1) * SIZE + x;
+          const down = (y === SIZE - 1 ? 0 : y + 1) * SIZE + x;
+          const neighborSum = spins[left] + spins[right] + spins[up] + spins[down];
+          const energyChange = 2 * spin * neighborSum;
+
+          if (energyChange <= 0 || random() < probabilities[energyChange >> 2]) {
+            spins[index] = -spin;
+          }
+        }
+      }
+
+      function observationRadius() {
+        return Math.max(0, Math.round((2 ** scaleLevel - 1) * (SIZE / 65.64)));
+      }
+
+      function boxBlur(source, target, radius) {
+        const diameter = radius * 2 + 1;
+        const inverseDiameter = 1 / diameter;
+
+        for (let y = 0; y < SIZE; y += 1) {
+          const row = y * SIZE;
+          let sum = 0;
+          for (let offset = -radius; offset <= radius; offset += 1) {
+            sum += source[row + (offset + SIZE) % SIZE];
+          }
+          for (let x = 0; x < SIZE; x += 1) {
+            horizontalAverage[row + x] = sum * inverseDiameter;
+            sum += source[row + (x + radius + 1) % SIZE];
+            sum -= source[row + (x - radius + SIZE) % SIZE];
+          }
+        }
+
+        for (let x = 0; x < SIZE; x += 1) {
+          let sum = 0;
+          for (let offset = -radius; offset <= radius; offset += 1) {
+            sum += horizontalAverage[((offset + SIZE) % SIZE) * SIZE + x];
+          }
+          for (let y = 0; y < SIZE; y += 1) {
+            target[y * SIZE + x] = sum * inverseDiameter;
+            sum += horizontalAverage[((y + radius + 1) % SIZE) * SIZE + x];
+            sum -= horizontalAverage[((y - radius + SIZE) % SIZE) * SIZE + x];
+          }
+        }
+      }
+
+      function buildObservedField(radius) {
+        if (radius === 0) {
+          for (let index = 0; index < COUNT; index += 1) {
+            observedField[index] = spins[index];
+          }
+          return;
+        }
+
+        boxBlur(spins, observedField, radius);
+        if (scaleLevel > 1) {
+          boxBlur(observedField, secondaryField, Math.max(1, Math.round(radius * 0.45)));
+          observedField.set(secondaryField);
+        }
+      }
+
+      function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        context.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        if (width > height * 1.08) {
+          fieldSide = height;
+          fieldX = 0;
+          fieldY = 0;
+        } else {
+          fieldSide = width;
+          fieldX = 0;
+          fieldY = Math.max(0, (height - fieldSide) * 0.12);
+        }
+      }
+
+      function render() {
+        const radius = observationRadius();
+        buildObservedField(radius);
+
+        const contrast = 1 + scaleLevel * 0.8;
+        const contrastNormalization = Math.tanh(contrast);
+        for (let index = 0; index < COUNT; index += 1) {
+          const displayValue = Math.tanh(observedField[index] * contrast) / contrastNormalization;
+          const paletteIndex = Math.max(0, Math.min(255, Math.round((displayValue + 1) * 127.5)));
+          const imageIndex = index * 4;
+          const colorIndex = paletteIndex * 3;
+          latticeImage.data[imageIndex] = palette[colorIndex];
+          latticeImage.data[imageIndex + 1] = palette[colorIndex + 1];
+          latticeImage.data[imageIndex + 2] = palette[colorIndex + 2];
+          latticeImage.data[imageIndex + 3] = 255;
+
+          const microColorIndex = (spins[index] < 0 ? 0 : 255) * 3;
+          microImage.data[imageIndex] = palette[microColorIndex];
+          microImage.data[imageIndex + 1] = palette[microColorIndex + 1];
+          microImage.data[imageIndex + 2] = palette[microColorIndex + 2];
+          microImage.data[imageIndex + 3] = 255;
+        }
+        latticeContext.putImageData(latticeImage, 0, 0);
+        microContext.putImageData(microImage, 0, 0);
+
+        context.fillStyle = '#090b10';
+        context.fillRect(0, 0, width, height);
+        context.imageSmoothingEnabled = radius > 0;
+        context.drawImage(
+          latticeCanvas,
+          0,
+          0,
+          SIZE,
+          SIZE,
+          fieldX,
+          fieldY,
+          fieldSide,
+          fieldSide
+        );
+
+        if (radius > 0) {
+          const microOpacity = 0.14 * (1 - scaleLevel / 3) ** 2;
+          context.save();
+          context.globalAlpha = microOpacity;
+          context.imageSmoothingEnabled = false;
+          context.drawImage(microCanvas, fieldX, fieldY, fieldSide, fieldSide);
+          context.restore();
+        }
+        drawDomainContours();
+        drawBrushCursor();
+      }
+
+      function drawDomainContours() {
+        const data = contourImage.data;
+        data.fill(0);
+        const alpha = Math.round(105 + (scaleLevel / 3) * 145);
+        const thick = scaleLevel >= 1;
+        for (let y = 0; y < SIZE - 1; y += 1) {
+          for (let x = 0; x < SIZE - 1; x += 1) {
+            const index = y * SIZE + x;
+            const sign = observedField[index] >= 0;
+            const edge = sign !== (observedField[index + 1] >= 0) ||
+              sign !== (observedField[index + SIZE] >= 0);
+            if (!edge) continue;
+
+            const pixel = index * 4;
+            data[pixel] = 255;
+            data[pixel + 1] = 249;
+            data[pixel + 2] = 233;
+            data[pixel + 3] = alpha;
+
+            if (thick) {
+              const rightPixel = (index + 1) * 4;
+              const downPixel = (index + SIZE) * 4;
+              data[rightPixel] = data[downPixel] = 255;
+              data[rightPixel + 1] = data[downPixel + 1] = 249;
+              data[rightPixel + 2] = data[downPixel + 2] = 233;
+              data[rightPixel + 3] = data[downPixel + 3] = alpha;
+            }
+          }
+        }
+
+        contourContext.putImageData(contourImage, 0, 0);
+        context.save();
+        context.imageSmoothingEnabled = scaleLevel > 0;
+        context.drawImage(contourCanvas, fieldX, fieldY, fieldSide, fieldSide);
+        context.restore();
+      }
+
+      function updateStats() {
+        let magnetization = 0;
+        let energy = 0;
+
+        for (let y = 0; y < SIZE; y += 1) {
+          for (let x = 0; x < SIZE; x += 1) {
+            const index = y * SIZE + x;
+            const spin = spins[index];
+            magnetization += spin;
+            energy -= spin * (
+              spins[y * SIZE + (x + 1) % SIZE] +
+              spins[((y + 1) % SIZE) * SIZE + x]
+            );
+          }
+        }
+
+        magnetizationValue.textContent = Math.abs(magnetization / COUNT).toFixed(3);
+        energyValue.textContent = (energy / COUNT).toFixed(3);
+
+        const distance = temperature - CRITICAL_TEMPERATURE;
+        if (distance < -0.2) phaseValue.textContent = 'ordered';
+        else if (distance > 0.2) phaseValue.textContent = 'disordered';
+        else phaseValue.textContent = 'critical';
+      }
+
+      function updateTemperatureInterface() {
+        temperatureValue.textContent = `T = ${temperature.toFixed(2)}`;
+      }
+
+      function updateScaleInterface() {
+        const copy = scaleCopy[Math.min(3, Math.floor(scaleLevel + 0.25))];
+        const diameter = observationRadius() * 2 + 1;
+        const macroProgress = scaleLevel / 3;
+        scaleValue.textContent = diameter === 1 ? '1 spin' : `${diameter} × ${diameter}`;
+        explanation.textContent = copy.text;
+        document.documentElement.style.setProperty(
+          '--noise-opacity',
+          (0.12 * (1 - macroProgress) ** 2).toFixed(3)
+        );
+      }
+
+      function updateBrushInterface() {
+        brushSizeValue.textContent = `${brushDiameter} spins`;
+      }
+
+      function latticePositionAt(clientX, clientY) {
+        const normalizedX = (clientX - fieldX) / fieldSide;
+        const normalizedY = (clientY - fieldY) / fieldSide;
+        if (normalizedX < 0 || normalizedX >= 1 || normalizedY < 0 || normalizedY >= 1) return null;
+        return {
+          x: Math.floor(normalizedX * SIZE),
+          y: Math.floor(normalizedY * SIZE)
+        };
+      }
+
+      function pointerLatticePosition(event) {
+        return latticePositionAt(event.clientX, event.clientY);
+      }
+
+      function drawBrushCursor() {
+        if (!pointerInsideField) return;
+        const position = latticePositionAt(pointerX, pointerY);
+        if (!position) return;
+
+        const hoveredSpin = painting
+          ? paintSpin
+          : (observedField[position.y * SIZE + position.x] >= 0 ? 1 : -1);
+        const radius = Math.max(2, brushDiameter * 0.5 * fieldSide / SIZE);
+
+        context.save();
+        context.beginPath();
+        context.rect(fieldX, fieldY, fieldSide, fieldSide);
+        context.clip();
+        context.beginPath();
+        context.arc(pointerX, pointerY, radius, 0, Math.PI * 2);
+        context.strokeStyle = 'rgba(7, 9, 14, 0.9)';
+        context.lineWidth = 4;
+        context.stroke();
+        context.strokeStyle = hoveredSpin > 0 ? '#ff693d' : '#369cff';
+        context.lineWidth = 2;
+        context.stroke();
+        context.restore();
+      }
+
+      function paint(event) {
+        const position = pointerLatticePosition(event);
+        if (!position) return;
+        const centerX = position.x;
+        const centerY = position.y;
+        const radius = brushDiameter / 2;
+
+        for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
+          for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+            if (offsetX * offsetX + offsetY * offsetY > radius * radius) continue;
+            const x = (centerX + offsetX + SIZE) % SIZE;
+            const y = (centerY + offsetY + SIZE) % SIZE;
+            spins[y * SIZE + x] = paintSpin;
+          }
+        }
+      }
+
+      function animate(timestamp) {
+        if (timestamp - previousFrameTime < FRAME_INTERVAL) {
+          requestAnimationFrame(animate);
+          return;
+        }
+        previousFrameTime = timestamp;
+        if (!paused) {
+          metropolisSweep(ATTEMPTS_PER_FRAME);
+          frame += 1;
+          if (frame % 12 === 0) updateStats();
+        }
+        render();
+        requestAnimationFrame(animate);
+      }
+
+      temperatureInput.addEventListener('input', () => {
+        temperature = Number(temperatureInput.value);
+        updateTemperatureInterface();
+        updateStats();
+      });
+
+      scaleInput.addEventListener('input', () => {
+        scaleLevel = Number(scaleInput.value);
+        updateScaleInterface();
+      });
+
+      brushSizeInput.addEventListener('input', () => {
+        brushDiameter = Number(brushSizeInput.value);
+        updateBrushInterface();
+      });
+
+      pauseButton.addEventListener('click', () => {
+        paused = !paused;
+        pauseButton.textContent = paused ? 'Resume' : 'Pause';
+      });
+
+      settingsToggle.addEventListener('click', () => {
+        settingsOpen = !settingsOpen;
+        settingsPanel.classList.toggle('is-closed', !settingsOpen);
+        settingsPanel.setAttribute('aria-hidden', String(!settingsOpen));
+        settingsToggle.setAttribute('aria-expanded', String(settingsOpen));
+        settingsToggle.setAttribute('aria-label', settingsOpen ? 'Close settings' : 'Open settings');
+      });
+
+      restartButton.addEventListener('click', () => {
+        initialize();
+      });
+
+      canvas.addEventListener('pointerdown', (event) => {
+        const position = pointerLatticePosition(event);
+        if (!position) return;
+        pointerX = event.clientX;
+        pointerY = event.clientY;
+        pointerInsideField = true;
+        painting = true;
+        paintSpin = observedField[position.y * SIZE + position.x] >= 0 ? 1 : -1;
+        canvas.setPointerCapture(event.pointerId);
+        paint(event);
+      });
+
+      canvas.addEventListener('pointermove', (event) => {
+        pointerX = event.clientX;
+        pointerY = event.clientY;
+        pointerInsideField = pointerLatticePosition(event) !== null;
+        if (painting) paint(event);
+      });
+
+      canvas.addEventListener('pointerup', (event) => {
+        painting = false;
+        canvas.releasePointerCapture(event.pointerId);
+        updateStats();
+      });
+
+      canvas.addEventListener('pointercancel', () => {
+        painting = false;
+        pointerInsideField = false;
+      });
+
+      canvas.addEventListener('pointerleave', () => {
+        if (!painting) pointerInsideField = false;
+      });
+
+      canvas.addEventListener('wheel', (event) => {
+        if (!pointerLatticePosition(event)) return;
+        event.preventDefault();
+        const direction = Math.sign(event.deltaY);
+        if (direction === 0) return;
+        scaleLevel = Math.max(0, Math.min(3, scaleLevel + direction * 0.12));
+        scaleInput.value = scaleLevel.toFixed(2);
+        updateScaleInterface();
+        pointerX = event.clientX;
+        pointerY = event.clientY;
+        pointerInsideField = true;
+      }, { passive: false });
+
+      window.addEventListener('blur', () => {
+        painting = false;
+        pointerInsideField = false;
+      });
+
+      window.addEventListener('resize', resize);
+
+      buildPalette();
+      resize();
+      updateTemperatureInterface();
+      updateScaleInterface();
+      updateBrushInterface();
+      initialize();
+      animate();
+    })();
+  </script>
+</body>
+</html>

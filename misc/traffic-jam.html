@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="">
+  <meta name="description" content="Две встречные волны автомобильной пробки на кольцах спирали Фрейзера.">
+  <title>Пробка на кольцах Фрейзера</title>
+  <script>
+    const COLORS = Object.freeze({
+      background: '#050505',
+      fraserLight: '#ffffff',
+      fraserMiddle: '#b3b3b3',
+      fraserDark: '#000000',
+      car: '#555b60',
+      carTop: '#70777d',
+      glass: '#262b2f',
+      headlight: '#ffffff',
+      headlightGlowRgb: '255, 255, 255',
+      taillight: '#de2828',
+      brakeLight: '#ff2020',
+      brakeShadow: '#ff0808',
+      brakeGlowCoreRgb: '255, 38, 38',
+      brakeGlowMidRgb: '255, 0, 0',
+      brakeGlowEdgeRgb: '210, 0, 0',
+      carShadow: 'rgba(0, 0, 0, 0.10)',
+      timerText: '#fff7f7',
+      transparent: 'transparent'
+    });
+
+    const SETTINGS = Object.freeze({
+      layout: Object.freeze({
+        wideAspectRatio: 1.08,
+        devicePixelRatioCap: 2,
+        circleFill: 0.9,
+        minimumRadius: 60
+      }),
+      pattern: Object.freeze({
+        clipRadius: 1,
+        imageScale: 1.035,
+        innerLaneSourceRadius: 0.7,
+        outerLaneSourceRadius: 0.885
+      }),
+      traffic: Object.freeze({
+        framesPerSecond: 60,
+        cycleSeconds: 24,
+        innerLaneCars: 10,
+        outerLaneCars: 14,
+        innerLaneDirection: -1,
+        outerLaneDirection: 1,
+        carRevolutionsPerCycle: 1,
+        waveRevolutionsPerCycle: -1,
+        innerWaveOffset: 0,
+        outerWaveOffset: Math.PI,
+        innerCarOffset: 0.04,
+        outerCarOffsetInGaps: 0.5,
+        stopWaveStrength: 0.485,
+        brakeLead: 0.28,
+        brakeWidth: 0.52,
+        brakeFadeStart: 0.08,
+        brakeFadeEnd: 0.92
+      }),
+      car: Object.freeze({
+        minimumScale: 0.74,
+        scaleReferenceRadius: 330,
+        length: 27,
+        width: 12,
+        cornerRadius: 2.5,
+        roofStart: -0.13,
+        roofLength: 0.38,
+        roofWidth: 0.78,
+        roofCornerRadius: 1.7,
+        windshieldX: 0.13,
+        windshieldWidth: 1.8,
+        windshieldHeight: 0.68,
+        lightLateralPosition: 0.31,
+        headlightInset: 1.6,
+        headlightWidth: 2.2,
+        headlightHeight: 2.3,
+        taillightInset: 0.8,
+        taillightWidth: 2.7,
+        taillightHeight: 2.3,
+        brakingTaillightGrowth: 1.4
+      }),
+      lights: Object.freeze({
+        brakeActivation: 0.02,
+        brakeGlowRearOffset: 2,
+        brakeGlowRadius: 28,
+        brakeGlowCoreStop: 0,
+        brakeGlowMidStop: 0.28,
+        brakeGlowEdgeStop: 0.68,
+        brakeGlowCoreOpacity: 0.42,
+        brakeGlowMidOpacity: 0.21,
+        brakeGlowEdgeOpacity: 0.07,
+        brakeShadowBlur: 11,
+        headlightGlowOpacity: 0.85,
+        headlightShadowBlur: 4
+      }),
+      shadow: Object.freeze({
+        offsetX: 5,
+        offsetY: 7,
+        blur: 4
+      }),
+      timer: Object.freeze({
+        distanceFromCircle: 200,
+        safeMargin: 110,
+        fontSize: 48,
+        fontWeight: 500,
+        decimalPlaces: 2,
+        minimumWholeDigits: 2
+      })
+    });
+
+    document.documentElement.style.setProperty('--scene-background', COLORS.background);
+    document.querySelector('meta[name="theme-color"]').content = COLORS.background;
+  </script>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--scene-background);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--scene-background);
+    }
+
+    main {
+      width: 100%;
+      height: 100%;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: var(--scene-background);
+    }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1 class="visually-hidden">Пробка на кольцах спирали Фрейзера</h1>
+    <canvas id="scene" role="img" aria-label="Два встречных потока автомобилей движутся по кольцам спирали Фрейзера; волны затора идут против потока, рядом отображается обратный отсчёт цикла."></canvas>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const canvas = document.querySelector('#scene');
+      const ctx = canvas.getContext('2d');
+
+      const TAU = Math.PI * 2;
+      const FPS = SETTINGS.traffic.framesPerSecond;
+      const CYCLE_FRAMES = SETTINGS.traffic.cycleSeconds * FPS;
+      const FRAME_MS = 1000 / FPS;
+
+      const FRASER_SVG = `
+        <svg width="450" height="450" viewBox="0 0 450 450" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" fill="${COLORS.fraserDark}">
+          <defs>
+            <path id="b" d="m54.672 34.876c-6.3986 5.7319-16.952 15.733-28.363 29.77 19.437-14.563 37.566-23.524 49.649-28.709 11.043-8.6857 22.073-15.826 32.56-21.704-21.476 5.4893-39.522 13.155-53.845 20.643z"/>
+            <path id="a" d="m51.775 47.439c-1.7574-11.85-3.0098-23.793-3.8045-35.788-12.894-3.3268-25.954-6.1131-39.112-8.414 1.915 13.224 4.3193 26.365 7.2681 39.355 0 0 23.859 2.7451 35.649 4.8477z"/>
+          </defs>
+          <rect width="450" height="450" fill="${COLORS.fraserLight}"/>
+          <g transform="matrix(1.0098 -.15994 .15994 1.0098 -42.561 29.784)">
+            <use transform="matrix(2.7902e-4,-8.5875e-4,8.5875e-4,2.7902e-4,228.36,229.66)" xlink:href="#i"/>
+            <g id="i" transform="matrix(1.0419,0,0,1.0419,-9.5736,-9.612)">
+              <use transform="matrix(-.02431 .017662 -.017662 -.02431 238.22 231.06)" xlink:href="#j"/>
+              <g id="j">
+                <use transform="matrix(.053567 .16486 -.16486 .053567 254.2 179.54)" xlink:href="#k"/>
+                <g id="k">
+                  <use transform="matrix(.33683 .24472 -.24472 .33683 207.77 96.267)" xlink:href="#l"/>
+                  <g id="l">
+                    <use transform="matrix(.61367 .19939 -.19939 .61367 134.08 43.089)" xlink:href="#m"/>
+                    <g id="m">
+                      <use transform="matrix(.79339 .12566 -.12566 .79339 76.075 18.696)" xlink:href="#n"/>
+                      <g id="n">
+                        <use transform="rotate(180,228.6,229.52)" xlink:href="#f"/>
+                        <g id="f">
+                          <use transform="rotate(90,228.6,229.52)" xlink:href="#g"/>
+                          <g id="g">
+                            <use transform="rotate(72,228.6,229.52)" xlink:href="#c"/>
+                            <use transform="rotate(36,228.6,229.52)" xlink:href="#h"/>
+                            <g id="h">
+                              <use transform="rotate(18,228.6,229.52)" xlink:href="#c"/>
+                              <g id="c">
+                                <use transform="rotate(8.9991,228.64,229.45)" fill="${COLORS.fraserMiddle}" xlink:href="#a"/>
+                                <use transform="matrix(.8985 .070618 -.070618 .8985 40.235 8.11)" xlink:href="#a"/>
+                                <use transform="rotate(8.936,229.85,231.02)" xlink:href="#b"/>
+                                <use fill="${COLORS.fraserMiddle}" xlink:href="#a"/>
+                                <use fill="${COLORS.fraserLight}" xlink:href="#b"/>
+                              </g>
+                            </g>
+                          </g>
+                        </g>
+                      </g>
+                    </g>
+                  </g>
+                </g>
+              </g>
+            </g>
+          </g>
+        </svg>
+      `;
+
+      const fraserImage = new Image();
+      let fraserImageReady = false;
+      fraserImage.addEventListener('load', () => {
+        fraserImageReady = true;
+      });
+      fraserImage.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(FRASER_SVG)}`;
+
+      let width = 0;
+      let height = 0;
+      let dpr = 1;
+      let layout = null;
+      let startTime = performance.now();
+
+      function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        dpr = Math.min(
+          window.devicePixelRatio || 1,
+          SETTINGS.layout.devicePixelRatioCap
+        );
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        const wide = width / height > SETTINGS.layout.wideAspectRatio;
+        const timerReserve = SETTINGS.timer.distanceFromCircle + SETTINGS.timer.safeMargin;
+        const minimumDiameter = SETTINGS.layout.minimumRadius * 2;
+        const circleAreaWidth = Math.max(
+          minimumDiameter,
+          wide ? width - timerReserve : width
+        );
+        const circleAreaHeight = Math.max(
+          minimumDiameter,
+          wide ? height : height - timerReserve
+        );
+        const outerRadius = Math.max(
+          SETTINGS.layout.minimumRadius,
+          Math.min(circleAreaWidth, circleAreaHeight) * SETTINGS.layout.circleFill * 0.5
+        );
+
+        layout = {
+          wide,
+          cx: circleAreaWidth * 0.5,
+          cy: circleAreaHeight * 0.5,
+          outerRadius,
+          patternRadius: outerRadius * SETTINGS.pattern.clipRadius,
+          laneRadii: [
+            outerRadius
+              * SETTINGS.pattern.innerLaneSourceRadius
+              * SETTINGS.pattern.imageScale,
+            outerRadius
+              * SETTINGS.pattern.outerLaneSourceRadius
+              * SETTINGS.pattern.imageScale
+          ]
+        };
+      }
+
+      function smoothstep(edge0, edge1, value) {
+        const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)));
+        return t * t * (3 - 2 * t);
+      }
+
+      function wrapAngle(angle) {
+        return Math.atan2(Math.sin(angle), Math.cos(angle));
+      }
+
+      function circlePath(radius) {
+        ctx.beginPath();
+        ctx.arc(layout.cx, layout.cy, radius, 0, TAU);
+      }
+
+      function drawFraserPattern() {
+        const imageRadius = layout.patternRadius * SETTINGS.pattern.imageScale;
+
+        ctx.save();
+        circlePath(layout.patternRadius);
+        ctx.clip();
+        ctx.fillStyle = COLORS.fraserLight;
+        ctx.fillRect(
+          layout.cx - layout.patternRadius,
+          layout.cy - layout.patternRadius,
+          layout.patternRadius * 2,
+          layout.patternRadius * 2
+        );
+        if (fraserImageReady) {
+          ctx.drawImage(
+            fraserImage,
+            layout.cx - imageRadius,
+            layout.cy - imageRadius,
+            imageRadius * 2,
+            imageRadius * 2
+          );
+        }
+        ctx.restore();
+      }
+
+      function laneDefinitions() {
+        return [
+          {
+            radius: layout.laneRadii[0],
+            carCount: SETTINGS.traffic.innerLaneCars,
+            direction: SETTINGS.traffic.innerLaneDirection,
+            waveOffset: SETTINGS.traffic.innerWaveOffset,
+            offset: SETTINGS.traffic.innerCarOffset
+          },
+          {
+            radius: layout.laneRadii[1],
+            carCount: SETTINGS.traffic.outerLaneCars,
+            direction: SETTINGS.traffic.outerLaneDirection,
+            waveOffset: SETTINGS.traffic.outerWaveOffset,
+            offset: TAU
+              * SETTINGS.traffic.outerCarOffsetInGaps
+              / SETTINGS.traffic.outerLaneCars
+          }
+        ];
+      }
+
+      function waveCenter(lane, progress) {
+        return lane.waveOffset
+          + lane.direction
+            * TAU
+            * SETTINGS.traffic.waveRevolutionsPerCycle
+            * progress;
+      }
+
+      function laneState(index, lane, progress) {
+        const base = TAU * (index / lane.carCount) + lane.offset;
+        const unperturbedAngle = base
+          + lane.direction
+            * TAU
+            * SETTINGS.traffic.carRevolutionsPerCycle
+            * progress;
+        const center = waveCenter(lane, progress);
+        const waveArgument = lane.direction * (unperturbedAngle - center);
+        const signedDistance = wrapAngle(waveArgument);
+        const brakeDistance = (
+          signedDistance + SETTINGS.traffic.brakeLead
+        ) / SETTINGS.traffic.brakeWidth;
+        const brake = Math.exp(-(brakeDistance * brakeDistance));
+
+        return {
+          angle: unperturbedAngle
+            - lane.direction
+              * SETTINGS.traffic.stopWaveStrength
+              * Math.sin(waveArgument),
+          brake: smoothstep(
+            SETTINGS.traffic.brakeFadeStart,
+            SETTINGS.traffic.brakeFadeEnd,
+            brake
+          )
+        };
+      }
+
+      function drawGlow(x, y, radius, intensity) {
+        const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+        gradient.addColorStop(
+          SETTINGS.lights.brakeGlowCoreStop,
+          `rgba(${COLORS.brakeGlowCoreRgb}, ${SETTINGS.lights.brakeGlowCoreOpacity * intensity})`
+        );
+        gradient.addColorStop(
+          SETTINGS.lights.brakeGlowMidStop,
+          `rgba(${COLORS.brakeGlowMidRgb}, ${SETTINGS.lights.brakeGlowMidOpacity * intensity})`
+        );
+        gradient.addColorStop(
+          SETTINGS.lights.brakeGlowEdgeStop,
+          `rgba(${COLORS.brakeGlowEdgeRgb}, ${SETTINGS.lights.brakeGlowEdgeOpacity * intensity})`
+        );
+        gradient.addColorStop(1, `rgba(${COLORS.brakeGlowEdgeRgb}, 0)`);
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, TAU);
+        ctx.fill();
+      }
+
+      function drawCar(angle, radius, direction, braking) {
+        const scale = Math.max(
+          SETTINGS.car.minimumScale,
+          layout.outerRadius / SETTINGS.car.scaleReferenceRadius
+        );
+        const length = SETTINGS.car.length * scale;
+        const carWidth = SETTINGS.car.width * scale;
+        const x = layout.cx + Math.cos(angle) * radius;
+        const y = layout.cy + Math.sin(angle) * radius;
+        const rotation = angle + direction * Math.PI / 2;
+
+        ctx.save();
+        ctx.translate(
+          x + SETTINGS.shadow.offsetX * scale,
+          y + SETTINGS.shadow.offsetY * scale
+        );
+        ctx.rotate(rotation);
+        ctx.filter = `blur(${SETTINGS.shadow.blur * scale}px)`;
+        ctx.fillStyle = COLORS.carShadow;
+        ctx.beginPath();
+        ctx.roundRect(
+          -length / 2,
+          -carWidth / 2,
+          length,
+          carWidth,
+          SETTINGS.car.cornerRadius * scale
+        );
+        ctx.fill();
+        ctx.restore();
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rotation);
+
+        const rearX = -length * 0.5;
+        const frontX = length * 0.5;
+        const lightY = carWidth * SETTINGS.car.lightLateralPosition;
+
+        if (braking > SETTINGS.lights.brakeActivation) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          drawGlow(
+            rearX - SETTINGS.lights.brakeGlowRearOffset * scale,
+            -lightY,
+            SETTINGS.lights.brakeGlowRadius * scale,
+            braking
+          );
+          drawGlow(
+            rearX - SETTINGS.lights.brakeGlowRearOffset * scale,
+            lightY,
+            SETTINGS.lights.brakeGlowRadius * scale,
+            braking
+          );
+          ctx.restore();
+        }
+
+        ctx.fillStyle = COLORS.car;
+        ctx.beginPath();
+        ctx.roundRect(
+          -length / 2,
+          -carWidth / 2,
+          length,
+          carWidth,
+          SETTINGS.car.cornerRadius * scale
+        );
+        ctx.fill();
+
+        ctx.fillStyle = COLORS.carTop;
+        ctx.beginPath();
+        ctx.roundRect(
+          length * SETTINGS.car.roofStart,
+          -carWidth * SETTINGS.car.roofWidth * 0.5,
+          length * SETTINGS.car.roofLength,
+          carWidth * SETTINGS.car.roofWidth,
+          SETTINGS.car.roofCornerRadius * scale
+        );
+        ctx.fill();
+
+        ctx.fillStyle = COLORS.glass;
+        ctx.fillRect(
+          length * SETTINGS.car.windshieldX,
+          -carWidth * SETTINGS.car.windshieldHeight * 0.5,
+          SETTINGS.car.windshieldWidth * scale,
+          carWidth * SETTINGS.car.windshieldHeight
+        );
+
+        ctx.fillStyle = COLORS.headlight;
+        ctx.shadowColor = `rgba(${COLORS.headlightGlowRgb}, ${SETTINGS.lights.headlightGlowOpacity})`;
+        ctx.shadowBlur = SETTINGS.lights.headlightShadowBlur * scale;
+        ctx.fillRect(
+          frontX - SETTINGS.car.headlightInset * scale,
+          -lightY - SETTINGS.car.headlightHeight * scale * 0.5,
+          SETTINGS.car.headlightWidth * scale,
+          SETTINGS.car.headlightHeight * scale
+        );
+        ctx.fillRect(
+          frontX - SETTINGS.car.headlightInset * scale,
+          lightY - SETTINGS.car.headlightHeight * scale * 0.5,
+          SETTINGS.car.headlightWidth * scale,
+          SETTINGS.car.headlightHeight * scale
+        );
+
+        const brakesActive = braking > SETTINGS.lights.brakeActivation;
+        ctx.shadowColor = brakesActive ? COLORS.brakeShadow : COLORS.transparent;
+        ctx.shadowBlur = SETTINGS.lights.brakeShadowBlur * scale * braking;
+        ctx.fillStyle = brakesActive ? COLORS.brakeLight : COLORS.taillight;
+        const tailHeight = (
+          SETTINGS.car.taillightHeight
+          + SETTINGS.car.brakingTaillightGrowth * braking
+        ) * scale;
+        ctx.fillRect(
+          rearX - SETTINGS.car.taillightInset * scale,
+          -lightY - tailHeight / 2,
+          SETTINGS.car.taillightWidth * scale,
+          tailHeight
+        );
+        ctx.fillRect(
+          rearX - SETTINGS.car.taillightInset * scale,
+          lightY - tailHeight / 2,
+          SETTINGS.car.taillightWidth * scale,
+          tailHeight
+        );
+        ctx.restore();
+      }
+
+      function drawCars(progress) {
+        for (const lane of laneDefinitions()) {
+          for (let index = 0; index < lane.carCount; index += 1) {
+            const state = laneState(index, lane, progress);
+            drawCar(state.angle, lane.radius, lane.direction, state.brake);
+          }
+        }
+      }
+
+      function drawTimer(cycleFrame) {
+        let remainingSeconds = (CYCLE_FRAMES - cycleFrame) / FPS;
+        if (cycleFrame === CYCLE_FRAMES - 1) remainingSeconds = 0;
+
+        const minimumLength = SETTINGS.timer.minimumWholeDigits
+          + SETTINGS.timer.decimalPlaces
+          + 1;
+        const timerText = remainingSeconds
+          .toFixed(SETTINGS.timer.decimalPlaces)
+          .padStart(minimumLength, '0');
+        const x = layout.wide
+          ? layout.cx + layout.outerRadius + SETTINGS.timer.distanceFromCircle
+          : layout.cx;
+        const y = layout.wide
+          ? layout.cy
+          : layout.cy + layout.outerRadius + SETTINGS.timer.distanceFromCircle;
+
+        ctx.save();
+        ctx.fillStyle = COLORS.timerText;
+        ctx.font = `${SETTINGS.timer.fontWeight} ${SETTINGS.timer.fontSize}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(timerText, x, y);
+        ctx.restore();
+      }
+
+      function draw(timestamp) {
+        const absoluteFrame = Math.floor((timestamp - startTime) / FRAME_MS);
+        const cycleFrame = ((absoluteFrame % CYCLE_FRAMES) + CYCLE_FRAMES) % CYCLE_FRAMES;
+
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = COLORS.background;
+        ctx.fillRect(0, 0, width, height);
+
+        drawFraserPattern();
+        drawCars(cycleFrame / CYCLE_FRAMES);
+        drawTimer(cycleFrame);
+
+        requestAnimationFrame(draw);
+      }
+
+      window.addEventListener('resize', resize, { passive: true });
+      resize();
+      requestAnimationFrame(draw);
+    })();
+  </script>
+</body>
+</html>
