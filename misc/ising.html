@@ -151,7 +151,8 @@
       margin-bottom: 9px;
     }
 
-    .control label {
+    .control label,
+    .control-label {
       font-size: 13px;
       font-weight: 600;
     }
@@ -377,6 +378,17 @@
 
       <div class="control">
         <div class="control-head">
+          <label for="scale">Observation scale</label>
+          <output id="scale-value" for="scale">1 spin</output>
+        </div>
+        <input id="scale" type="range" min="0" max="3" value="1.6" step="0.01">
+        <div class="scale-labels" aria-hidden="true">
+          <span>spins</span><span>domains</span><span>field</span>
+        </div>
+      </div>
+
+      <div class="control">
+        <div class="control-head">
           <label for="temperature">Temperature</label>
           <output id="temperature-value" for="temperature">T = 2.27</output>
         </div>
@@ -389,22 +401,11 @@
       <div class="control">
         <div class="control-head">
           <label for="brush-size">Brush size</label>
-          <output id="brush-size-value" for="brush-size">48 spins</output>
+          <output id="brush-size-value" for="brush-size">48 px</output>
         </div>
-        <input id="brush-size" type="range" min="4" max="200" value="48" step="2">
+        <input id="brush-size" type="range" min="4" max="200" value="48" step="4">
         <div class="scale-labels" aria-hidden="true">
           <span>point</span><span>medium</span><span>wide</span>
-        </div>
-      </div>
-
-      <div class="control">
-        <div class="control-head">
-          <label for="scale">Observation scale</label>
-          <output id="scale-value" for="scale">1 spin</output>
-        </div>
-        <input id="scale" type="range" min="0" max="3" value="1.6" step="0.01">
-        <div class="scale-labels" aria-hidden="true">
-          <span>spins</span><span>domains</span><span>field</span>
         </div>
       </div>
 
@@ -422,7 +423,7 @@
       </dl>
     </section>
 
-    <div class="hint">Wheel: scale · circle: brush size</div>
+    <div class="hint">Wheel or pinch: scale · circle: brush size</div>
     <div class="legend"><span>−1</span><i></i><span>+1</span></div>
   </main>
 
@@ -430,22 +431,30 @@
     (() => {
       'use strict';
 
-      function initialGridSize() {
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
-        const fieldSize = viewportWidth > viewportHeight * 1.08
-          ? viewportHeight
-          : viewportWidth;
-        return Math.max(256, Math.round(fieldSize));
+      function targetGridMetrics() {
+        const viewportWidth = Math.max(1, window.innerWidth);
+        const viewportHeight = Math.max(1, window.innerHeight);
+        const mobile = viewportWidth <= 720;
+        const desiredDensity = mobile ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+        const maximumDensity = Math.sqrt(2_000_000 / (viewportWidth * viewportHeight));
+        const density = Math.max(1, Math.min(desiredDensity, maximumDensity));
+        return {
+          density,
+          width: Math.round(viewportWidth * density),
+          height: Math.round(viewportHeight * density)
+        };
       }
 
-      const SIZE = initialGridSize();
-      const COUNT = SIZE * SIZE;
       const CRITICAL_TEMPERATURE = 2 / Math.log(1 + Math.sqrt(2));
-      const WARMUP_SWEEPS = SIZE > 800 ? 32 : 48;
-      const ATTEMPTS_PER_FRAME = Math.round(COUNT * 0.02);
-      const FRAME_INTERVAL = 1000 / (SIZE > 900 ? 20 : 24);
       const DPR_CAP = 2;
+      const initialGrid = targetGridMetrics();
+      let gridDensity = initialGrid.density;
+      let gridWidth = initialGrid.width;
+      let gridHeight = initialGrid.height;
+      let count = gridWidth * gridHeight;
+      let warmupSweeps = count > 900_000 ? 24 : 40;
+      let attemptsPerFrame = Math.round(count * 0.014);
+      let frameInterval = 1000 / (count > 1_200_000 ? 15 : 20);
 
       const canvas = document.querySelector('#field');
       const context = canvas.getContext('2d', { alpha: false });
@@ -464,10 +473,10 @@
       const magnetizationValue = document.querySelector('#magnetization');
       const energyValue = document.querySelector('#energy');
 
-      const spins = new Int8Array(COUNT);
-      const horizontalAverage = new Float32Array(COUNT);
-      const observedField = new Float32Array(COUNT);
-      const secondaryField = new Float32Array(COUNT);
+      let spins = new Int8Array(count);
+      let horizontalAverage = new Float32Array(count);
+      let observedField = new Float32Array(count);
+      let secondaryField = new Float32Array(count);
       const palette = new Uint8ClampedArray(256 * 3);
       const latticeCanvas = document.createElement('canvas');
       const latticeContext = latticeCanvas.getContext('2d', { alpha: false });
@@ -475,33 +484,39 @@
       const microContext = microCanvas.getContext('2d');
       const contourCanvas = document.createElement('canvas');
       const contourContext = contourCanvas.getContext('2d');
-      latticeCanvas.width = SIZE;
-      latticeCanvas.height = SIZE;
-      microCanvas.width = SIZE;
-      microCanvas.height = SIZE;
-      contourCanvas.width = SIZE;
-      contourCanvas.height = SIZE;
-      const latticeImage = latticeContext.createImageData(SIZE, SIZE);
-      const microImage = microContext.createImageData(SIZE, SIZE);
-      const contourImage = contourContext.createImageData(SIZE, SIZE);
+      latticeCanvas.width = gridWidth;
+      latticeCanvas.height = gridHeight;
+      microCanvas.width = gridWidth;
+      microCanvas.height = gridHeight;
+      contourCanvas.width = gridWidth;
+      contourCanvas.height = gridHeight;
+      let latticeImage = latticeContext.createImageData(gridWidth, gridHeight);
+      let microImage = microContext.createImageData(gridWidth, gridHeight);
+      let contourImage = contourContext.createImageData(gridWidth, gridHeight);
 
       let temperature = Number(temperatureInput.value);
       let scaleLevel = Number(scaleInput.value);
+      let targetScaleLevel = scaleLevel;
       let brushDiameter = Number(brushSizeInput.value);
       let paused = false;
+      let initialized = false;
       let frame = 0;
       let previousFrameTime = 0;
       let width = 0;
       let height = 0;
       let dpr = 1;
-      let fieldSide = 0;
-      let fieldX = 0;
-      let fieldY = 0;
       let painting = false;
       let paintSpin = 1;
       let pointerX = 0;
       let pointerY = 0;
       let pointerInsideField = false;
+      let lastPaintPosition = null;
+      const activePointers = new Map();
+      let pinchStartDistance = 0;
+      let pinchStartScale = scaleLevel;
+      let pinchActive = false;
+      let touchPaintPending = false;
+      let touchGestureHadPinch = false;
       let settingsOpen = true;
       let randomState = seedFromClock();
 
@@ -551,15 +566,19 @@
         }
       }
 
-      function initialize() {
+      function randomizeSpins() {
         randomState = seedFromClock();
-        for (let index = 0; index < COUNT; index += 1) {
+        for (let index = 0; index < count; index += 1) {
           spins[index] = random() < 0.5 ? -1 : 1;
         }
+      }
 
-        for (let sweep = 0; sweep < WARMUP_SWEEPS; sweep += 1) {
-          metropolisSweep(COUNT);
+      function initialize() {
+        randomizeSpins();
+        for (let sweep = 0; sweep < warmupSweeps; sweep += 1) {
+          metropolisSweep(count);
         }
+        initialized = true;
         updateStats();
       }
 
@@ -571,14 +590,14 @@
         ];
 
         for (let attempt = 0; attempt < attempts; attempt += 1) {
-          const x = Math.floor(random() * SIZE);
-          const y = Math.floor(random() * SIZE);
-          const index = y * SIZE + x;
+          const x = Math.floor(random() * gridWidth);
+          const y = Math.floor(random() * gridHeight);
+          const index = y * gridWidth + x;
           const spin = spins[index];
-          const left = y * SIZE + (x === 0 ? SIZE - 1 : x - 1);
-          const right = y * SIZE + (x === SIZE - 1 ? 0 : x + 1);
-          const up = (y === 0 ? SIZE - 1 : y - 1) * SIZE + x;
-          const down = (y === SIZE - 1 ? 0 : y + 1) * SIZE + x;
+          const left = y * gridWidth + (x === 0 ? gridWidth - 1 : x - 1);
+          const right = y * gridWidth + (x === gridWidth - 1 ? 0 : x + 1);
+          const up = (y === 0 ? gridHeight - 1 : y - 1) * gridWidth + x;
+          const down = (y === gridHeight - 1 ? 0 : y + 1) * gridWidth + x;
           const neighborSum = spins[left] + spins[right] + spins[up] + spins[down];
           const energyChange = 2 * spin * neighborSum;
 
@@ -589,42 +608,42 @@
       }
 
       function observationRadius() {
-        return Math.max(0, Math.round((2 ** scaleLevel - 1) * (SIZE / 65.64)));
+        return Math.max(0, Math.round((2 ** scaleLevel - 1) * (Math.min(gridWidth, gridHeight) / 65.64)));
       }
 
       function boxBlur(source, target, radius) {
         const diameter = radius * 2 + 1;
         const inverseDiameter = 1 / diameter;
 
-        for (let y = 0; y < SIZE; y += 1) {
-          const row = y * SIZE;
+        for (let y = 0; y < gridHeight; y += 1) {
+          const row = y * gridWidth;
           let sum = 0;
           for (let offset = -radius; offset <= radius; offset += 1) {
-            sum += source[row + (offset + SIZE) % SIZE];
+            sum += source[row + (offset + gridWidth) % gridWidth];
           }
-          for (let x = 0; x < SIZE; x += 1) {
+          for (let x = 0; x < gridWidth; x += 1) {
             horizontalAverage[row + x] = sum * inverseDiameter;
-            sum += source[row + (x + radius + 1) % SIZE];
-            sum -= source[row + (x - radius + SIZE) % SIZE];
+            sum += source[row + (x + radius + 1) % gridWidth];
+            sum -= source[row + (x - radius + gridWidth) % gridWidth];
           }
         }
 
-        for (let x = 0; x < SIZE; x += 1) {
+        for (let x = 0; x < gridWidth; x += 1) {
           let sum = 0;
           for (let offset = -radius; offset <= radius; offset += 1) {
-            sum += horizontalAverage[((offset + SIZE) % SIZE) * SIZE + x];
+            sum += horizontalAverage[((offset + gridHeight) % gridHeight) * gridWidth + x];
           }
-          for (let y = 0; y < SIZE; y += 1) {
-            target[y * SIZE + x] = sum * inverseDiameter;
-            sum += horizontalAverage[((y + radius + 1) % SIZE) * SIZE + x];
-            sum -= horizontalAverage[((y - radius + SIZE) % SIZE) * SIZE + x];
+          for (let y = 0; y < gridHeight; y += 1) {
+            target[y * gridWidth + x] = sum * inverseDiameter;
+            sum += horizontalAverage[((y + radius + 1) % gridHeight) * gridWidth + x];
+            sum -= horizontalAverage[((y - radius + gridHeight) % gridHeight) * gridWidth + x];
           }
         }
       }
 
       function buildObservedField(radius) {
         if (radius === 0) {
-          for (let index = 0; index < COUNT; index += 1) {
+          for (let index = 0; index < count; index += 1) {
             observedField[index] = spins[index];
           }
           return;
@@ -637,25 +656,73 @@
         }
       }
 
-      function resize() {
+      function configureGridBuffers() {
+        latticeCanvas.width = gridWidth;
+        latticeCanvas.height = gridHeight;
+        microCanvas.width = gridWidth;
+        microCanvas.height = gridHeight;
+        contourCanvas.width = gridWidth;
+        contourCanvas.height = gridHeight;
+        latticeImage = latticeContext.createImageData(gridWidth, gridHeight);
+        microImage = microContext.createImageData(gridWidth, gridHeight);
+        contourImage = contourContext.createImageData(gridWidth, gridHeight);
+      }
+
+      function rebuildGrid(metrics) {
+        const oldSpins = spins;
+        const oldWidth = gridWidth;
+        const oldHeight = gridHeight;
+        const preservePixels = Math.abs(metrics.density - gridDensity) < 0.001;
+
+        gridDensity = metrics.density;
+        gridWidth = metrics.width;
+        gridHeight = metrics.height;
+        count = gridWidth * gridHeight;
+        warmupSweeps = count > 900_000 ? 24 : 40;
+        attemptsPerFrame = Math.round(count * 0.014);
+        frameInterval = 1000 / (count > 1_200_000 ? 15 : 20);
+
+        spins = new Int8Array(count);
+        horizontalAverage = new Float32Array(count);
+        observedField = new Float32Array(count);
+        secondaryField = new Float32Array(count);
+        for (let index = 0; index < count; index += 1) {
+          spins[index] = random() < 0.5 ? -1 : 1;
+        }
+
+        if (preservePixels) {
+          const copyWidth = Math.min(oldWidth, gridWidth);
+          const copyHeight = Math.min(oldHeight, gridHeight);
+          for (let y = 0; y < copyHeight; y += 1) {
+            const oldRow = y * oldWidth;
+            const newRow = y * gridWidth;
+            spins.set(oldSpins.subarray(oldRow, oldRow + copyWidth), newRow);
+          }
+        }
+
+        configureGridBuffers();
+        updateStats();
+      }
+
+      function applyResize() {
         width = window.innerWidth;
         height = window.innerHeight;
         dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
+        const metrics = targetGridMetrics();
+        const gridChanged = metrics.width !== gridWidth
+          || metrics.height !== gridHeight
+          || Math.abs(metrics.density - gridDensity) > 0.001;
+
         canvas.width = Math.round(width * dpr);
         canvas.height = Math.round(height * dpr);
-        canvas.style.width = `${width}px`;
-        canvas.style.height = `${height}px`;
         context.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-        if (width > height * 1.08) {
-          fieldSide = height;
-          fieldX = 0;
-          fieldY = 0;
-        } else {
-          fieldSide = width;
-          fieldX = 0;
-          fieldY = Math.max(0, (height - fieldSide) * 0.12);
-        }
+        if (gridChanged) rebuildGrid(metrics);
+        if (initialized) render();
+      }
+
+      function resize() {
+        applyResize();
       }
 
       function render() {
@@ -664,7 +731,7 @@
 
         const contrast = 1 + scaleLevel * 0.8;
         const contrastNormalization = Math.tanh(contrast);
-        for (let index = 0; index < COUNT; index += 1) {
+        for (let index = 0; index < count; index += 1) {
           const displayValue = Math.tanh(observedField[index] * contrast) / contrastNormalization;
           const paletteIndex = Math.max(0, Math.min(255, Math.round((displayValue + 1) * 127.5)));
           const imageIndex = index * 4;
@@ -690,12 +757,12 @@
           latticeCanvas,
           0,
           0,
-          SIZE,
-          SIZE,
-          fieldX,
-          fieldY,
-          fieldSide,
-          fieldSide
+          gridWidth,
+          gridHeight,
+          0,
+          0,
+          width,
+          height
         );
 
         if (radius > 0) {
@@ -703,7 +770,7 @@
           context.save();
           context.globalAlpha = microOpacity;
           context.imageSmoothingEnabled = false;
-          context.drawImage(microCanvas, fieldX, fieldY, fieldSide, fieldSide);
+          context.drawImage(microCanvas, 0, 0, width, height);
           context.restore();
         }
         drawDomainContours();
@@ -715,12 +782,12 @@
         data.fill(0);
         const alpha = Math.round(105 + (scaleLevel / 3) * 145);
         const thick = scaleLevel >= 1;
-        for (let y = 0; y < SIZE - 1; y += 1) {
-          for (let x = 0; x < SIZE - 1; x += 1) {
-            const index = y * SIZE + x;
+        for (let y = 0; y < gridHeight - 1; y += 1) {
+          for (let x = 0; x < gridWidth - 1; x += 1) {
+            const index = y * gridWidth + x;
             const sign = observedField[index] >= 0;
             const edge = sign !== (observedField[index + 1] >= 0) ||
-              sign !== (observedField[index + SIZE] >= 0);
+              sign !== (observedField[index + gridWidth] >= 0);
             if (!edge) continue;
 
             const pixel = index * 4;
@@ -731,7 +798,7 @@
 
             if (thick) {
               const rightPixel = (index + 1) * 4;
-              const downPixel = (index + SIZE) * 4;
+              const downPixel = (index + gridWidth) * 4;
               data[rightPixel] = data[downPixel] = 255;
               data[rightPixel + 1] = data[downPixel + 1] = 249;
               data[rightPixel + 2] = data[downPixel + 2] = 233;
@@ -743,7 +810,7 @@
         contourContext.putImageData(contourImage, 0, 0);
         context.save();
         context.imageSmoothingEnabled = scaleLevel > 0;
-        context.drawImage(contourCanvas, fieldX, fieldY, fieldSide, fieldSide);
+        context.drawImage(contourCanvas, 0, 0, width, height);
         context.restore();
       }
 
@@ -751,20 +818,20 @@
         let magnetization = 0;
         let energy = 0;
 
-        for (let y = 0; y < SIZE; y += 1) {
-          for (let x = 0; x < SIZE; x += 1) {
-            const index = y * SIZE + x;
+        for (let y = 0; y < gridHeight; y += 1) {
+          for (let x = 0; x < gridWidth; x += 1) {
+            const index = y * gridWidth + x;
             const spin = spins[index];
             magnetization += spin;
             energy -= spin * (
-              spins[y * SIZE + (x + 1) % SIZE] +
-              spins[((y + 1) % SIZE) * SIZE + x]
+              spins[y * gridWidth + (x + 1) % gridWidth] +
+              spins[((y + 1) % gridHeight) * gridWidth + x]
             );
           }
         }
 
-        magnetizationValue.textContent = Math.abs(magnetization / COUNT).toFixed(3);
-        energyValue.textContent = (energy / COUNT).toFixed(3);
+        magnetizationValue.textContent = Math.abs(magnetization / count).toFixed(3);
+        energyValue.textContent = (energy / count).toFixed(3);
 
         const distance = temperature - CRITICAL_TEMPERATURE;
         if (distance < -0.2) phaseValue.textContent = 'ordered';
@@ -789,16 +856,16 @@
       }
 
       function updateBrushInterface() {
-        brushSizeValue.textContent = `${brushDiameter} spins`;
+        brushSizeValue.textContent = `${brushDiameter} px`;
       }
 
       function latticePositionAt(clientX, clientY) {
-        const normalizedX = (clientX - fieldX) / fieldSide;
-        const normalizedY = (clientY - fieldY) / fieldSide;
+        const normalizedX = clientX / width;
+        const normalizedY = clientY / height;
         if (normalizedX < 0 || normalizedX >= 1 || normalizedY < 0 || normalizedY >= 1) return null;
         return {
-          x: Math.floor(normalizedX * SIZE),
-          y: Math.floor(normalizedY * SIZE)
+          x: Math.floor(normalizedX * gridWidth),
+          y: Math.floor(normalizedY * gridHeight)
         };
       }
 
@@ -813,12 +880,12 @@
 
         const hoveredSpin = painting
           ? paintSpin
-          : (observedField[position.y * SIZE + position.x] >= 0 ? 1 : -1);
-        const radius = Math.max(2, brushDiameter * 0.5 * fieldSide / SIZE);
+          : (observedField[position.y * gridWidth + position.x] >= 0 ? 1 : -1);
+        const radius = Math.max(2, brushDiameter * 0.5);
 
         context.save();
         context.beginPath();
-        context.rect(fieldX, fieldY, fieldSide, fieldSide);
+        context.rect(0, 0, width, height);
         context.clip();
         context.beginPath();
         context.arc(pointerX, pointerY, radius, 0, Math.PI * 2);
@@ -831,31 +898,81 @@
         context.restore();
       }
 
-      function paint(event) {
-        const position = pointerLatticePosition(event);
-        if (!position) return;
-        const centerX = position.x;
-        const centerY = position.y;
-        const radius = brushDiameter / 2;
+      function paintSegment(start, end) {
+        const radius = brushDiameter * gridDensity / 2;
+        const radiusSquared = radius * radius;
+        const deltaX = end.x - start.x;
+        const deltaY = end.y - start.y;
+        const lengthSquared = deltaX * deltaX + deltaY * deltaY;
+        const minX = Math.floor(Math.min(start.x, end.x) - radius);
+        const maxX = Math.ceil(Math.max(start.x, end.x) + radius);
+        const minY = Math.floor(Math.min(start.y, end.y) - radius);
+        const maxY = Math.ceil(Math.max(start.y, end.y) + radius);
 
-        for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
-          for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
-            if (offsetX * offsetX + offsetY * offsetY > radius * radius) continue;
-            const x = (centerX + offsetX + SIZE) % SIZE;
-            const y = (centerY + offsetY + SIZE) % SIZE;
-            spins[y * SIZE + x] = paintSpin;
+        for (let y = minY; y <= maxY; y += 1) {
+          for (let x = minX; x <= maxX; x += 1) {
+            const projection = lengthSquared === 0
+              ? 0
+              : Math.max(0, Math.min(1, ((x - start.x) * deltaX + (y - start.y) * deltaY) / lengthSquared));
+            const closestX = start.x + projection * deltaX;
+            const closestY = start.y + projection * deltaY;
+            const distanceX = x - closestX;
+            const distanceY = y - closestY;
+            if (distanceX * distanceX + distanceY * distanceY > radiusSquared) continue;
+
+            const wrappedX = (x + gridWidth) % gridWidth;
+            const wrappedY = (y + gridHeight) % gridHeight;
+            spins[wrappedY * gridWidth + wrappedX] = paintSpin;
           }
         }
       }
 
+      function paint(event) {
+        const position = pointerLatticePosition(event);
+        if (!position) {
+          lastPaintPosition = null;
+          return;
+        }
+
+        paintSegment(lastPaintPosition || position, position);
+        lastPaintPosition = position;
+      }
+
+      function beginPainting(event, position) {
+        pointerX = event.clientX;
+        pointerY = event.clientY;
+        pointerInsideField = true;
+        painting = true;
+        lastPaintPosition = null;
+        paintSpin = observedField[position.y * gridWidth + position.x] >= 0 ? 1 : -1;
+      }
+
+      function distanceBetweenPointers() {
+        const points = [...activePointers.values()];
+        if (points.length < 2) return 0;
+        return Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
+      }
+
       function animate(timestamp) {
-        if (timestamp - previousFrameTime < FRAME_INTERVAL) {
+        if (timestamp - previousFrameTime < frameInterval) {
           requestAnimationFrame(animate);
           return;
         }
         previousFrameTime = timestamp;
+
+        const scaleDifference = targetScaleLevel - scaleLevel;
+        if (Math.abs(scaleDifference) > 0.0005) {
+          scaleLevel += scaleDifference * 0.2;
+          scaleInput.value = scaleLevel.toFixed(2);
+          updateScaleInterface();
+        } else if (scaleLevel !== targetScaleLevel) {
+          scaleLevel = targetScaleLevel;
+          scaleInput.value = scaleLevel.toFixed(2);
+          updateScaleInterface();
+        }
+
         if (!paused) {
-          metropolisSweep(ATTEMPTS_PER_FRAME);
+          metropolisSweep(attemptsPerFrame);
           frame += 1;
           if (frame % 12 === 0) updateStats();
         }
@@ -871,12 +988,24 @@
 
       scaleInput.addEventListener('input', () => {
         scaleLevel = Number(scaleInput.value);
+        targetScaleLevel = scaleLevel;
         updateScaleInterface();
       });
 
-      brushSizeInput.addEventListener('input', () => {
-        brushDiameter = Number(brushSizeInput.value);
+      function setBrushDiameter(value) {
+        brushDiameter = Math.max(4, Math.min(200, value));
+        brushSizeInput.value = String(brushDiameter);
         updateBrushInterface();
+      }
+
+      brushSizeInput.addEventListener('input', () => {
+        setBrushDiameter(Number(brushSizeInput.value));
+      });
+
+      window.addEventListener('keydown', (event) => {
+        if (event.code !== 'BracketLeft' && event.code !== 'BracketRight') return;
+        event.preventDefault();
+        setBrushDiameter(brushDiameter + (event.code === 'BracketLeft' ? -4 : 4));
       });
 
       pauseButton.addEventListener('click', () => {
@@ -893,18 +1022,38 @@
       });
 
       restartButton.addEventListener('click', () => {
-        initialize();
+        randomizeSpins();
+        updateStats();
+        render();
       });
 
       canvas.addEventListener('pointerdown', (event) => {
         const position = pointerLatticePosition(event);
         if (!position) return;
-        pointerX = event.clientX;
-        pointerY = event.clientY;
-        pointerInsideField = true;
-        painting = true;
-        paintSpin = observedField[position.y * SIZE + position.x] >= 0 ? 1 : -1;
         canvas.setPointerCapture(event.pointerId);
+
+        if (event.pointerType === 'touch') {
+          activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+          pointerX = event.clientX;
+          pointerY = event.clientY;
+          pointerInsideField = true;
+
+          if (activePointers.size === 1) {
+            touchPaintPending = true;
+            touchGestureHadPinch = false;
+          } else if (activePointers.size === 2) {
+            painting = false;
+            lastPaintPosition = null;
+            touchPaintPending = false;
+            touchGestureHadPinch = true;
+            pinchActive = true;
+            pinchStartDistance = distanceBetweenPointers();
+            pinchStartScale = targetScaleLevel;
+          }
+          return;
+        }
+
+        beginPainting(event, position);
         paint(event);
       });
 
@@ -912,18 +1061,64 @@
         pointerX = event.clientX;
         pointerY = event.clientY;
         pointerInsideField = pointerLatticePosition(event) !== null;
+
+        if (event.pointerType === 'touch') {
+          if (!activePointers.has(event.pointerId)) return;
+          activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+          if (pinchActive && activePointers.size >= 2) {
+            const distance = distanceBetweenPointers();
+            if (pinchStartDistance > 0 && distance > 0) {
+              const scaleDelta = Math.log2(distance / pinchStartDistance);
+              targetScaleLevel = Math.max(0, Math.min(3, pinchStartScale - scaleDelta * 0.9));
+            }
+            return;
+          }
+
+          if (activePointers.size === 1 && !touchGestureHadPinch) {
+            const position = pointerLatticePosition(event);
+            if (!position) return;
+            if (touchPaintPending) {
+              beginPainting(event, position);
+              touchPaintPending = false;
+            }
+            if (painting) paint(event);
+          }
+          return;
+        }
+
         if (painting) paint(event);
       });
 
       canvas.addEventListener('pointerup', (event) => {
+        if (event.pointerType === 'touch') {
+          if (touchPaintPending && !touchGestureHadPinch) {
+            const position = pointerLatticePosition(event);
+            if (position) {
+              beginPainting(event, position);
+              paint(event);
+            }
+          }
+          activePointers.delete(event.pointerId);
+          if (activePointers.size < 2) pinchActive = false;
+          if (activePointers.size === 0) {
+            touchPaintPending = false;
+            touchGestureHadPinch = false;
+          }
+        }
         painting = false;
-        canvas.releasePointerCapture(event.pointerId);
+        lastPaintPosition = null;
+        if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
         updateStats();
       });
 
-      canvas.addEventListener('pointercancel', () => {
+      canvas.addEventListener('pointercancel', (event) => {
+        activePointers.delete(event.pointerId);
+        if (activePointers.size < 2) pinchActive = false;
         painting = false;
+        lastPaintPosition = null;
         pointerInsideField = false;
+        touchPaintPending = false;
       });
 
       canvas.addEventListener('pointerleave', () => {
@@ -933,11 +1128,8 @@
       canvas.addEventListener('wheel', (event) => {
         if (!pointerLatticePosition(event)) return;
         event.preventDefault();
-        const direction = Math.sign(event.deltaY);
-        if (direction === 0) return;
-        scaleLevel = Math.max(0, Math.min(3, scaleLevel + direction * 0.12));
-        scaleInput.value = scaleLevel.toFixed(2);
-        updateScaleInterface();
+        const delta = Math.max(-120, Math.min(120, event.deltaY));
+        targetScaleLevel = Math.max(0, Math.min(3, targetScaleLevel + delta * 0.00125));
         pointerX = event.clientX;
         pointerY = event.clientY;
         pointerInsideField = true;
@@ -945,7 +1137,12 @@
 
       window.addEventListener('blur', () => {
         painting = false;
+        lastPaintPosition = null;
         pointerInsideField = false;
+        activePointers.clear();
+        pinchActive = false;
+        touchPaintPending = false;
+        touchGestureHadPinch = false;
       });
 
       window.addEventListener('resize', resize);
