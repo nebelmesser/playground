@@ -1,0 +1,14 @@
+{
+  "name": "ising-field-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.72",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.3"
+  }
+}
