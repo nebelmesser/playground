@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#11100e" />
+    <meta name="description" content="A real-time perspective-aware Escher Droste image transformer." />
+    <title>Escher Droste Effect Editor</title>
+  </head>
+  <body>
+    <div class="app-shell" id="app">
+      <header class="topbar">
+        <div class="brand-block">
+          <a class="brand" href="../" aria-label="Back to playground">
+            <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          </a>
+          <p class="app-title">Escher Droste Effect Editor by <a href="https://nebelmesser.com" target="_blank" rel="noopener noreferrer">Nebelmesser</a></p>
+        </div>
+        <div class="top-actions">
+          <span class="gpu-state" id="gpu-state"><i></i> WEBGL2</span>
+          <button class="button button-quiet" id="open-button" type="button">
+            <span aria-hidden="true">＋</span> Open image
+          </button>
+          <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="studio" aria-label="Droste editor">
+          <div class="canvas-grid">
+            <article class="canvas-card source-card">
+              <div class="card-heading">
+                <span><b>01</b> SOURCE FRAMES</span>
+                <span class="source-heading-actions">
+                  <button
+                    class="heading-toggle"
+                    id="inner-detail-button"
+                    type="button"
+                    aria-pressed="false"
+                    title="Magnify INNER for precise corner placement"
+                  >⌕ INNER DETAIL</button>
+                  <span id="image-meta">DEMO · 1600 × 1000</span>
+                </span>
+              </div>
+              <div class="canvas-frame" id="source-frame">
+                <canvas id="source-canvas" aria-label="Source image with a draggable inner quadrilateral and rectangular outer crop"></canvas>
+                <div class="canvas-tip" id="canvas-tip">DRAG INSIDE A FRAME TO MOVE IT</div>
+              </div>
+            </article>
+
+            <article class="canvas-card result-card">
+              <div class="card-heading">
+                <span><b>02</b> DROSTE RESULT</span>
+                <span class="result-heading-actions">
+                  <label class="heading-aspect">
+                    <span>ASPECT</span>
+                    <select id="output-aspect" aria-label="Output aspect">
+                      <option value="2:3">2:3</option>
+                      <option value="3:4">3:4</option>
+                      <option value="9:16">9:16</option>
+                      <option value="1:1" selected>SQUARE</option>
+                      <option value="16:9">16:9</option>
+                      <option value="4:3">4:3</option>
+                      <option value="3:2">3:2</option>
+                    </select>
+                  </label>
+                  <span class="live-stat"><i></i><span id="fps">READY</span></span>
+                </span>
+              </div>
+              <div class="canvas-frame" id="result-frame">
+                <canvas id="result-canvas" aria-label="Rendered Escher Droste image"></canvas>
+                <div class="webgl-error" id="webgl-error" hidden>
+                  WebGL2 is unavailable in this browser.
+                </div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <aside class="controls" aria-label="Transformation controls">
+          <div class="controls-heading">
+            <span>TRANSFORMATION</span>
+            <button class="text-button" id="reset-button" type="button">RESET</button>
+          </div>
+
+          <section class="control-group">
+            <div class="control-label">
+              <span class="field-label">SPIRAL DIRECTION</span>
+            </div>
+            <div class="direction-toggle" role="group" aria-label="Spiral direction">
+              <button id="direction-left" type="button" aria-pressed="false">← LEFT</button>
+              <button id="direction-right" type="button" aria-pressed="true">RIGHT →</button>
+            </div>
+          </section>
+
+          <section class="control-group">
+            <div class="control-label">
+              <label for="scale">SPIRAL STRENGTH</label>
+              <output id="scale-value" for="scale">1.00×</output>
+            </div>
+            <input id="scale" type="range" min="0.25" max="2" step="0.01" value="1" />
+            <div class="range-ticks"><span>SOFTER</span><span id="auto-scale">NATURAL</span><span>STRONGER</span></div>
+          </section>
+
+          <section class="control-group frame-control">
+            <div class="control-label">
+              <label for="phase">FRAME / ZOOM</label>
+              <output id="phase-value" for="phase">0%</output>
+            </div>
+            <input id="phase" type="range" min="0" max="1" step="0.001" value="0" />
+            <p class="control-help">Choose the still frame. 0% and 100% are identical.</p>
+          </section>
+
+          <section class="control-group animation-control">
+            <div class="switch-row">
+              <span><strong>ANIMATE</strong><small>Optional infinite zoom preview</small></span>
+              <label class="switch">
+                <input id="animate" type="checkbox" />
+                <span aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="speed-row" id="speed-row" aria-disabled="true">
+              <label for="speed">SPEED</label>
+              <input id="speed" type="range" min="-5" max="5" step="0.05" value="0.35" />
+              <output id="speed-value" for="speed">0.35×</output>
+            </div>
+          </section>
+
+          <section class="export-block">
+            <div class="export-heading"><span>EXPORT STILL</span><small id="export-size">1600 × 1000 PX</small></div>
+            <button class="button button-primary" id="png-button" type="button">
+              <span>EXPORT PNG</span><b>↗</b>
+            </button>
+            <div class="export-heading video-heading"><span>VIDEO</span><small id="video-size">1920 × 1080</small></div>
+            <label class="resolution-row">
+              <span>RESOLUTION</span>
+              <select id="video-resolution" aria-label="Video resolution">
+                <option value="source">SOURCE</option>
+                <option value="1280">720p</option>
+                <option value="1920" selected>1080p</option>
+                <option value="2560">1440p</option>
+                <option value="3840">4K</option>
+              </select>
+            </label>
+            <label class="resolution-row">
+              <span>CYCLES</span>
+              <select id="video-cycles" aria-label="Animated cycles">
+                <option value="1" selected>1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+                <option value="8">8</option>
+                <option value="9">9</option>
+                <option value="10">10</option>
+              </select>
+            </label>
+            <button class="button button-secondary" id="mp4-button" type="button">
+              <span>EXPORT MP4 LOOP</span><b id="mp4-duration">04 SEC</b>
+            </button>
+            <p class="export-note" id="export-note" role="status">PNG uses the crop resolution. Each MP4 cycle is a 4-second H.264 loop.</p>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <div class="drop-overlay" id="drop-overlay" aria-hidden="true">
+      <div><span>↓</span><strong>DROP TO OPEN</strong><small>PNG · JPEG · WEBP</small></div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
