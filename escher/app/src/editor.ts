@@ -1,3 +1,4 @@
+import { detectFrame } from './detect-frame';
 import { clamp, isConvex, type Point } from './math';
 
 const DEFAULT_INNER: Point[] = [
@@ -35,6 +36,29 @@ type ViewBox = {
 
 function copyPoints(points: readonly Point[]): Point[] {
   return points.map((point) => ({ ...point }));
+}
+
+function containInner(points: readonly Point[]): Point[] {
+  const center = {
+    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
+  };
+  const margin = 0.02;
+  if (center.x <= margin || center.x >= 1 - margin || center.y <= margin || center.y >= 1 - margin) {
+    return copyPoints(points);
+  }
+  let scale = 1;
+  for (const point of points) {
+    if (point.x < margin) scale = Math.min(scale, (center.x - margin) / (center.x - point.x));
+    if (point.x > 1 - margin) scale = Math.min(scale, (center.x - (1 - margin)) / (center.x - point.x));
+    if (point.y < margin) scale = Math.min(scale, (center.y - margin) / (center.y - point.y));
+    if (point.y > 1 - margin) scale = Math.min(scale, (center.y - (1 - margin)) / (center.y - point.y));
+  }
+  if (!Number.isFinite(scale) || scale >= 0.999) return copyPoints(points);
+  return points.map((point) => ({
+    x: center.x + (point.x - center.x) * scale,
+    y: center.y + (point.y - center.y) * scale,
+  }));
 }
 
 const FRAME_MARGIN = 0.012;
@@ -240,11 +264,7 @@ export class SourceEditor {
     this.resizeObserver = new ResizeObserver(() => this.draw());
     this.resizeObserver.observe(this.canvas);
     this.createDemoImage();
-    this.outerPoints = fitOuterToInnerAspect(
-      this.innerPoints,
-      this.outerPoints,
-      this.width / this.height,
-    ) ?? this.outerPoints;
+    this.installDefaultFrames();
     this.draw();
   }
 
@@ -277,12 +297,7 @@ export class SourceEditor {
   }
 
   resetSelection(): void {
-    this.innerPoints = copyPoints(DEFAULT_INNER);
-    this.outerPoints = fitOuterToInnerAspect(
-      this.innerPoints,
-      DEFAULT_OUTER,
-      this.width / this.height,
-    ) ?? copyPoints(DEFAULT_OUTER);
+    this.installDefaultFrames();
     if (this.detailMode) this.detailViewBox = this.makeDetailViewBox();
     this.activeFrame = 'inner';
     this.activePoint = -1;
@@ -346,6 +361,22 @@ export class SourceEditor {
       if (lastResult.length <= 1_800_000) return lastResult;
     }
     return lastResult;
+  }
+
+  private installDefaultFrames(): void {
+    const aspect = this.width / Math.max(this.height, 1);
+    const fallbackInner = copyPoints(DEFAULT_INNER);
+    const fallbackOuter = fitOuterToInnerAspect(fallbackInner, DEFAULT_OUTER, aspect) ?? copyPoints(DEFAULT_OUTER);
+    const detected = detectFrame(this.imageCanvas);
+    const inner = detected ? containInner(detected) : null;
+    const outer = inner ? fitOuterToInnerAspect(inner, DEFAULT_OUTER, aspect) : null;
+    if (!inner || !outer || !this.validFrames(inner, outer)) {
+      this.innerPoints = fallbackInner;
+      this.outerPoints = fallbackOuter;
+      return;
+    }
+    this.innerPoints = inner;
+    this.outerPoints = outer;
   }
 
   private drawBitmap(bitmap: ImageBitmap, maximumDimension: number): void {
