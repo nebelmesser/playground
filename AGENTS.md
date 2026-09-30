@@ -12,11 +12,10 @@ Use **one** command. Do not start Jekyll, `python -m http.server`, `npx serve`, 
 
 | What | Where |
 | --- | --- |
-| Preview (use this) | `https://127.0.0.1:4000/` |
-| Jekyll (HTTP, backend only) | `http://127.0.0.1:4001/` |
+| Preview (use this) | `http://127.0.0.1:4000/` |
 
-After an edit, reload the HTTPS URL. Jekyll rebuilds on its own.
+After an edit, reload the HTTP URL. Jekyll rebuilds on its own.
 
 ## App source (`4d/app`, `hilbert/app`, `fractal/app`)
 
-`npm run dev` is only for Vite while editing TypeScript. People open the built files under `4d/`, `hilbert/`, and `fractal/` via **https://127.0.0.1:4000/**. After `npm run build`, reload that origin.
+`npm run dev` is only for Vite while editing TypeScript. People open the built files under `4d/`, `hilbert/`, `fractal/`, and `ising/` via **http://127.0.0.1:4000/**. After `npm run build`, reload that origin.

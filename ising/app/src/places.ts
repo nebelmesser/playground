@@ -49,19 +49,16 @@ type Placement = {
   letterSpacing: number;
   idealTracking: number;
   opacity: number;
-  rectX: number;
-  rectY: number;
-  rectW: number;
-  rectH: number;
+  collisionOpacity: number;
   mask: Uint8Array | null;
-  homeX: number;
-  homeY: number;
-  homeScore: number;
-  rivalX: number;
-  rivalY: number;
-  rivalScore: number;
+  velocityX: number;
+  velocityY: number;
+  candidateX: number;
+  candidateY: number;
+  candidateFrames: number;
+  collisionHidden: boolean;
+  collisionChangeSeconds: number;
   locked: boolean;
-  avoiding: boolean;
 };
 
 type PieceLayout = {
@@ -85,9 +82,7 @@ type Track = {
   missing: number;
   confirmed: boolean;
   placements: Placement[];
-  lastRelocate: number;
-  lastX: number;
-  lastY: number;
+  history: Uint8Array[];
 };
 
 type SolidRect = {
@@ -99,6 +94,7 @@ type SolidRect = {
 
 const STABLE_SECONDS = 15;
 const MIN_AREA_FRACTION = 0.0035;
+const MIN_ISLAND_AREA_FRACTION = 0.008;
 const LARGE_AREA_FRACTION = 0.055;
 const LARGE_ENTER_FRACTION = 0.058;
 const LARGE_EXIT_FRACTION = 0.042;
@@ -107,16 +103,25 @@ const MATCH_OF_OLD = 0.3;
 const MAX_AREA_RATIO = 2.5;
 const MISSING_FADE_SECONDS = 0.75;
 const MISSING_DROP_SECONDS = 3.2;
-const MIN_TRACKING_EM = 0.18;
-const MAX_TRACKING_EM = 0.42;
-const MAX_SPEED_PX = 42;
-const GLIDE_DEADZONE_PX = 14;
+const MIN_TRACKING_EM = 0.12;
+const MAX_TRACKING_EM = 0.28;
+const MAX_SPEED_PX = 30;
+const MAX_ACCELERATION_PX = 120;
+const POSITION_RESPONSE_SECONDS = 0.85;
 const TEXT_HEIGHT_EM = 1.35;
-const RELOCATE_COOLDOWN_SECONDS = 30;
-const MAX_ABS_ANGLE = 70;
-const DUPLICATE_AREA_RATIO = 0.55;
-const REJOIN_PX = 72;
-const ANGLE_SAMPLES = [-70, -48, -28, -12, 0, 12, 28, 48, 70];
+const MAX_ABS_ANGLE = 24;
+const MAX_GLIDE_DISTANCE_PX = 150;
+const ANCHOR_ACCEPT_PX = 14;
+const ANCHOR_CANDIDATE_PX = 20;
+const ANCHOR_CANDIDATE_FRAMES = 8;
+const TEMPORAL_HISTORY_LENGTH = 8;
+const TEMPORAL_OCCUPANCY = 0.625;
+const LABEL_COLLISION_PAD_PX = 7;
+const COLLISION_FADE_SECONDS = 0.22;
+const COLLISION_REVEAL_SECONDS = 0.7;
+const COLLISION_HIDE_DWELL_SECONDS = 0.35;
+const COLLISION_SHOW_DWELL_SECONDS = 0.9;
+const ANGLE_SAMPLES = [-24, -12, 0, 12, 24];
 const FADE_IN_SECONDS = 1.05;
 const FADE_OUT_SECONDS = 0.45;
 const CHAOS_FADE_SECONDS = 0.22;
@@ -141,8 +146,11 @@ const kindForFraction = (sign: number, fraction: number, previous: PlaceKind | n
   if (fraction < MIN_AREA_FRACTION) return null;
   const wasLarge = previous ? isLarge(previous) : false;
   const large = wasLarge ? fraction >= LARGE_EXIT_FRACTION : fraction >= (previous ? LARGE_ENTER_FRACTION : LARGE_AREA_FRACTION);
-  if (sign > 0) return large ? 'continent' : 'island';
-  return large ? 'sea' : 'lake';
+  const kind: PlaceKind = sign > 0
+    ? large ? 'continent' : 'island'
+    : large ? 'sea' : 'lake';
+  if (kind === 'island' && fraction < MIN_ISLAND_AREA_FRACTION) return null;
+  return kind;
 };
 
 const neighborsOf = (index: number, width: number, height: number): number[] => {
@@ -257,9 +265,9 @@ const extractRegions = (signs: Int8Array, width: number, height: number): Region
 };
 
 const fontFor = (kind: PlaceKind): { min: number; max: number } => {
-  if (kind === 'continent') return { min: 16, max: 38 };
-  if (kind === 'sea') return { min: 15, max: 30 };
-  return { min: 13, max: 22 };
+  if (kind === 'continent') return { min: 22, max: 38 };
+  if (kind === 'sea') return { min: 18, max: 30 };
+  return { min: 16, max: 20 };
 };
 
 export const labelPositions = (label: PlaceLabel): Array<{ x: number; y: number }> => (
@@ -270,10 +278,9 @@ export class PlaceTracker {
   private readonly measure: CanvasRenderingContext2D | null;
   private readonly tracks = new Map<number, Track>();
   private readonly usedStems = new Set<string>();
-  private owners = new Uint16Array(0);
+  private owners: Uint16Array<ArrayBufferLike> = new Uint16Array(0);
   private nextId = 1;
   private nextPlacementId = 1;
-  private clock = 0;
   private synced = false;
   private lastIngest = -1;
   private viewport: Viewport = { width: 1, height: 1 };
@@ -301,7 +308,6 @@ export class PlaceTracker {
   advance(deltaSeconds: number, mode: LabelMode, viewport: Viewport): PlaceLabel[] {
     this.viewport = viewport;
     const dt = clamp(deltaSeconds, 0, 0.5);
-    this.clock += dt;
     const snap = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (mode !== 'map') this.synced = false;
 
@@ -324,6 +330,7 @@ export class PlaceTracker {
       track.placements = track.placements.filter((placement) => placement.alive || placement.opacity > 0.02);
     }
 
+    this.resolveCollisions(dt, snap);
     const labels = this.collect();
     if (mode === 'chaos' && labels.length === 0) this.reset();
     return labels;
@@ -335,10 +342,19 @@ export class PlaceTracker {
     const gap = this.lastIngest < 0 ? 0 : Math.min(2, now - this.lastIngest);
     this.lastIngest = now;
     if (sample.width !== this.sampleWidth || sample.height !== this.sampleHeight) {
-      this.tracks.clear();
-      this.usedStems.clear();
-      this.owners = new Uint16Array(0);
-      this.nextId = 1;
+      const oldWidth = this.sampleWidth;
+      const oldHeight = this.sampleHeight;
+      this.owners = this.regridOwners(this.owners, oldWidth, oldHeight, sample.width, sample.height);
+      for (const track of this.tracks.values()) {
+        track.history = track.history.map((mask) => (
+          this.regridMask(mask, oldWidth, oldHeight, sample.width, sample.height)
+        ));
+        for (const placement of track.placements) {
+          placement.mask = placement.mask
+            ? this.regridMask(placement.mask, oldWidth, oldHeight, sample.width, sample.height)
+            : null;
+        }
+      }
       this.sampleWidth = sample.width;
       this.sampleHeight = sample.height;
     }
@@ -355,12 +371,12 @@ export class PlaceTracker {
       }
       for (const [trackId, overlap] of tally) candidates.push({ regionIndex, trackId, overlap });
     }
-    candidates.sort((a, b) => b.overlap - a.overlap);
 
     const assigned = new Map<number, Track>();
     const matched = new Set<number>();
+    const proposals = new Map<number, Array<{ regionIndex: number; trackId: number; overlap: number }>>();
+    const candidatesByTrack = new Map<number, Array<{ regionIndex: number; trackId: number; overlap: number }>>();
     for (const candidate of candidates) {
-      if (assigned.has(candidate.regionIndex) || matched.has(candidate.trackId)) continue;
       const track = this.tracks.get(candidate.trackId);
       const region = regions[candidate.regionIndex];
       if (!track || isLand(track.kind) !== isLand(region.kind)) continue;
@@ -368,7 +384,27 @@ export class PlaceTracker {
       if (candidate.overlap < MATCH_OF_OLD * track.area) continue;
       const ratio = region.area / track.area;
       if (ratio > MAX_AREA_RATIO || ratio < 1 / MAX_AREA_RATIO) continue;
-      assigned.set(candidate.regionIndex, track);
+      const list = candidatesByTrack.get(track.id) ?? [];
+      list.push(candidate);
+      candidatesByTrack.set(track.id, list);
+    }
+    for (const list of candidatesByTrack.values()) {
+      list.sort((a, b) => b.overlap - a.overlap);
+      const proposal = list[0];
+      const regionProposals = proposals.get(proposal.regionIndex) ?? [];
+      regionProposals.push(proposal);
+      proposals.set(proposal.regionIndex, regionProposals);
+    }
+    for (const [regionIndex, regionProposals] of proposals) {
+      regionProposals.sort((a, b) => {
+        const aTrack = this.tracks.get(a.trackId);
+        const bTrack = this.tracks.get(b.trackId);
+        const ageDifference = (bTrack?.age ?? 0) - (aTrack?.age ?? 0);
+        return Math.abs(ageDifference) > 0.25 ? ageDifference : b.overlap - a.overlap;
+      });
+      const track = this.tracks.get(regionProposals[0].trackId);
+      if (!track) continue;
+      assigned.set(regionIndex, track);
       matched.add(track.id);
     }
 
@@ -380,6 +416,7 @@ export class PlaceTracker {
       track.area = region.area;
       track.missing = 0;
       track.confirmed = true;
+      this.rememberRegion(track, region.cells);
       this.place(track, region);
     }
 
@@ -412,10 +449,9 @@ export class PlaceTracker {
         missing: 0,
         confirmed: true,
         placements: [],
-        lastRelocate: -1,
-        lastX: 0.5,
-        lastY: 0.5,
+        history: [],
       };
+      this.rememberRegion(track, region.cells);
       this.place(track, region);
       this.tracks.set(track.id, track);
       created.push({ region, track });
@@ -443,6 +479,7 @@ export class PlaceTracker {
   private place(track: Track, region: Region): void {
     const layouts = this.layouts(track, region.cells);
     const claimed = new Set<number>();
+    const adopted = new Set<number>();
     const ordered = [...track.placements].sort((a, b) => b.opacity - a.opacity);
     for (const placement of ordered) {
       if (!placement.alive) continue;
@@ -463,19 +500,19 @@ export class PlaceTracker {
           }
         }
       }
-      if (match < 0) continue;
+      if (match < 0 || !this.adopt(track, placement, layouts[match])) continue;
       claimed.add(match);
-      this.adopt(track, placement, layouts[match]);
+      adopted.add(placement.id);
+    }
+
+    for (const placement of track.placements) {
+      if (placement.alive && !adopted.has(placement.id)) this.retire(placement);
     }
 
     for (let pieceIndex = 0; pieceIndex < layouts.length; pieceIndex += 1) {
       if (claimed.has(pieceIndex)) continue;
-      if (track.placements.filter((placement) => placement.alive).length >= 2) break;
+      if (track.placements.some((placement) => placement.alive)) break;
       const piece = layouts[pieceIndex];
-      const duplicating = track.placements.some((placement) => placement.alive);
-      if (duplicating && piece.area < layouts[0].area * DUPLICATE_AREA_RATIO) continue;
-      const allow = this.mayAppear(track, piece.x, piece.y, duplicating);
-      if (!allow) continue;
       this.spawn(track, piece);
       claimed.add(pieceIndex);
     }
@@ -497,7 +534,8 @@ export class PlaceTracker {
     for (const cell of cells) member[cell] = 1;
     const layouts: PieceLayout[] = [];
     for (const piece of this.screenPieces(member, width, height)) {
-      const interior = this.readInterior(piece.mask);
+      const stableMask = this.temporalMask(piece.mask, track.history);
+      const interior = this.readInterior(stableMask) ?? this.readInterior(piece.mask);
       if (!interior) continue;
       const thick: number[] = [];
       const floor = Math.max(1, Math.floor(interior.max * 0.45));
@@ -505,15 +543,15 @@ export class PlaceTracker {
         if (piece.mask[index] === 1 && interior.dist[index] >= floor) thick.push(index);
       }
       const preferred = this.preferredAngle(thick.length >= 4 ? thick : interior.cells);
-      const eroded = new Uint8Array(piece.mask.length);
+      const eroded = new Uint8Array(stableMask.length);
       const inset = Math.max(1, Math.floor(interior.max * 0.35));
       if (inset > 1) {
         for (let index = 0; index < eroded.length; index += 1) {
-          if (piece.mask[index] === 1 && interior.dist[index] >= inset) eroded[index] = 1;
+          if (stableMask[index] === 1 && interior.dist[index] >= inset) eroded[index] = 1;
         }
       }
       let best: { rect: SolidRect; fit: { fontSize: number; letterSpacing: number; angle: number } } | null = null;
-      for (const candidate of inset > 1 ? [eroded, piece.mask] : [piece.mask]) {
+      for (const candidate of inset > 1 ? [eroded, stableMask, piece.mask] : [stableMask, piece.mask]) {
         for (const rect of candidateRects(candidate, width, height, minW, minH)) {
           const fit = this.chooseFit(track.text, track.kind, rect, preferred);
           if (!fit) continue;
@@ -541,6 +579,67 @@ export class PlaceTracker {
     }
     layouts.sort((a, b) => b.area - a.area);
     return layouts;
+  }
+
+  private rememberRegion(track: Track, cells: number[]): void {
+    const mask = new Uint8Array(this.sampleWidth * this.sampleHeight);
+    for (const cell of cells) mask[cell] = 1;
+    track.history.unshift(mask);
+    if (track.history.length > TEMPORAL_HISTORY_LENGTH) track.history.length = TEMPORAL_HISTORY_LENGTH;
+  }
+
+  private temporalMask(current: Uint8Array, history: Uint8Array[]): Uint8Array {
+    if (history.length < 2) return current;
+    const stable = new Uint8Array(current.length);
+    const required = Math.ceil(history.length * TEMPORAL_OCCUPANCY);
+    let stableCells = 0;
+    for (let index = 0; index < current.length; index += 1) {
+      if (current[index] !== 1) continue;
+      let occupied = 0;
+      for (const mask of history) occupied += mask[index] ?? 0;
+      if (occupied < required) continue;
+      stable[index] = 1;
+      stableCells += 1;
+    }
+    return stableCells > 0 ? stable : current;
+  }
+
+  private regridOwners(
+    source: Uint16Array,
+    oldWidth: number,
+    oldHeight: number,
+    newWidth: number,
+    newHeight: number,
+  ): Uint16Array {
+    const target = new Uint16Array(newWidth * newHeight);
+    if (oldWidth < 1 || oldHeight < 1 || source.length !== oldWidth * oldHeight) return target;
+    for (let y = 0; y < newHeight; y += 1) {
+      const sourceY = Math.min(oldHeight - 1, Math.floor(((y + 0.5) * oldHeight) / newHeight));
+      for (let x = 0; x < newWidth; x += 1) {
+        const sourceX = Math.min(oldWidth - 1, Math.floor(((x + 0.5) * oldWidth) / newWidth));
+        target[x + y * newWidth] = source[sourceX + sourceY * oldWidth];
+      }
+    }
+    return target;
+  }
+
+  private regridMask(
+    source: Uint8Array,
+    oldWidth: number,
+    oldHeight: number,
+    newWidth: number,
+    newHeight: number,
+  ): Uint8Array {
+    const target = new Uint8Array(newWidth * newHeight);
+    if (oldWidth < 1 || oldHeight < 1 || source.length !== oldWidth * oldHeight) return target;
+    for (let y = 0; y < newHeight; y += 1) {
+      const sourceY = Math.min(oldHeight - 1, Math.floor(((y + 0.5) * oldHeight) / newHeight));
+      for (let x = 0; x < newWidth; x += 1) {
+        const sourceX = Math.min(oldWidth - 1, Math.floor(((x + 0.5) * oldWidth) / newWidth));
+        target[x + y * newWidth] = source[sourceX + sourceY * oldWidth];
+      }
+    }
+    return target;
   }
 
   private preferredAngle(cells: number[]): number {
@@ -611,18 +710,32 @@ export class PlaceTracker {
     const radians = angleDeg * Math.PI / 180;
     const cosine = Math.abs(Math.cos(radians));
     const sine = Math.abs(Math.sin(radians));
-    for (let fontSize = limits.max; fontSize >= limits.min; fontSize -= 1) {
+    const fits = (fontSize: number): boolean => {
       const boxH = fontSize * TEXT_HEIGHT_EM;
       const minTracking = fontSize * MIN_TRACKING_EM;
       const minWidth = this.boxWidth(text, fontSize, minTracking);
       const minExtent = this.extents(minWidth, boxH, cosine, sine);
-      if (minExtent.w > availableX || minExtent.h > availableY) continue;
-      let letterSpacing = fontSize * MAX_TRACKING_EM;
-      const spaced = this.extents(this.boxWidth(text, fontSize, letterSpacing), boxH, cosine, sine);
-      if (spaced.w > availableX || spaced.h > availableY) letterSpacing = minTracking;
-      return { fontSize, letterSpacing };
+      return minExtent.w <= availableX && minExtent.h <= availableY;
+    };
+    if (!fits(limits.min)) return null;
+    let fontLow = limits.min;
+    let fontHigh = limits.max;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const candidate = (fontLow + fontHigh) / 2;
+      if (fits(candidate)) fontLow = candidate;
+      else fontHigh = candidate;
     }
-    return null;
+    const fontSize = fontLow;
+    const boxH = fontSize * TEXT_HEIGHT_EM;
+    let trackingLow = fontSize * MIN_TRACKING_EM;
+    let trackingHigh = fontSize * MAX_TRACKING_EM;
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const letterSpacing = (trackingLow + trackingHigh) / 2;
+      const spaced = this.extents(this.boxWidth(text, fontSize, letterSpacing), boxH, cosine, sine);
+      if (spaced.w <= availableX && spaced.h <= availableY) trackingLow = letterSpacing;
+      else trackingHigh = letterSpacing;
+    }
+    return { fontSize, letterSpacing: trackingLow };
   }
 
   private extents(boxW: number, boxH: number, cosine: number, sine: number): { w: number; h: number } {
@@ -714,76 +827,58 @@ export class PlaceTracker {
     return { dist, max, x: (sx / seen) * cellX, y: (sy / seen) * cellY, cells };
   }
 
-  private remember(placement: Placement, x: number, y: number): void {
-    if (placement.homeScore <= 0) {
-      placement.homeX = x;
-      placement.homeY = y;
-      placement.homeScore = 1;
-      placement.rivalX = x;
-      placement.rivalY = y;
-      placement.rivalScore = 0;
-      return;
+  private adopt(track: Track, placement: Placement, piece: PieceLayout): boolean {
+    const relocationDistance = this.planar(placement.displayX, placement.displayY, piece.x, piece.y);
+    const centerIndex = this.cellIndex(placement.displayX, placement.displayY);
+    const centerStillInside = centerIndex >= 0 && piece.mask[centerIndex] === 1;
+    if (placement.locked) {
+      if (!centerStillInside && relocationDistance > MAX_GLIDE_DISTANCE_PX) return false;
+      if (!centerStillInside && !this.pathFits(track.text, piece, placement.displayX, placement.displayY)) return false;
     }
-    if (this.planar(placement.homeX, placement.homeY, x, y) <= 64) {
-      placement.homeX += (x - placement.homeX) * 0.3;
-      placement.homeY += (y - placement.homeY) * 0.3;
-      placement.homeScore += 1;
-      return;
-    }
-    if (placement.rivalScore <= 0 || this.planar(placement.rivalX, placement.rivalY, x, y) > 64) {
-      placement.rivalX = x;
-      placement.rivalY = y;
-      placement.rivalScore = 1;
-      return;
-    }
-    placement.rivalX += (x - placement.rivalX) * 0.3;
-    placement.rivalY += (y - placement.rivalY) * 0.3;
-    placement.rivalScore += 1;
-    if (placement.rivalScore <= placement.homeScore) return;
-    const swapX = placement.homeX;
-    const swapY = placement.homeY;
-    const swapScore = placement.homeScore;
-    placement.homeX = placement.rivalX;
-    placement.homeY = placement.rivalY;
-    placement.homeScore = placement.rivalScore;
-    placement.rivalX = swapX;
-    placement.rivalY = swapY;
-    placement.rivalScore = swapScore;
-  }
 
-  private adopt(track: Track, placement: Placement, piece: PieceLayout): void {
     placement.alive = true;
     placement.mask = piece.mask;
-    placement.rectX = piece.rect.x;
-    placement.rectY = piece.rect.y;
-    placement.rectW = piece.rect.w;
-    placement.rectH = piece.rect.h;
     if (!placement.locked) {
-      this.remember(placement, piece.x, piece.y);
-      placement.displayX = placement.homeX;
-      placement.displayY = placement.homeY;
-      placement.idealX = placement.homeX;
-      placement.idealY = placement.homeY;
-      placement.angle = piece.angle;
-      placement.idealAngle = piece.angle;
-      placement.fontSize = piece.fontSize;
-      placement.idealFont = piece.fontSize;
-      placement.letterSpacing = piece.letterSpacing;
-      placement.idealTracking = piece.letterSpacing;
-      placement.avoiding = false;
-      return;
-    }
-    this.remember(placement, piece.x, piece.y);
-    placement.avoiding = !this.sitsInside(track, placement);
-    if (placement.avoiding) {
-      placement.homeX = piece.x;
-      placement.homeY = piece.y;
+      placement.displayX = piece.x;
+      placement.displayY = piece.y;
       placement.idealX = piece.x;
       placement.idealY = piece.y;
-      return;
+      placement.angle = piece.angle;
+      placement.fontSize = piece.fontSize;
+      placement.letterSpacing = piece.letterSpacing;
+      placement.candidateX = piece.x;
+      placement.candidateY = piece.y;
+      placement.candidateFrames = 0;
+      return true;
     }
-    placement.idealX = placement.homeX;
-    placement.idealY = placement.homeY;
+
+    const styleBlend = piece.fontSize < placement.idealFont ? 0.32 : 0.2;
+    placement.idealFont += (piece.fontSize - placement.idealFont) * styleBlend;
+    placement.idealTracking += (piece.letterSpacing - placement.idealTracking) * styleBlend;
+    placement.idealAngle += (piece.angle - placement.idealAngle) * 0.18;
+    const targetDistance = this.planar(placement.idealX, placement.idealY, piece.x, piece.y);
+    if (targetDistance <= ANCHOR_ACCEPT_PX) {
+      placement.idealX += (piece.x - placement.idealX) * 0.18;
+      placement.idealY += (piece.y - placement.idealY) * 0.18;
+      placement.candidateFrames = 0;
+      return true;
+    }
+
+    if (this.planar(placement.candidateX, placement.candidateY, piece.x, piece.y) <= ANCHOR_CANDIDATE_PX) {
+      placement.candidateX += (piece.x - placement.candidateX) * 0.35;
+      placement.candidateY += (piece.y - placement.candidateY) * 0.35;
+      placement.candidateFrames += 1;
+    } else {
+      placement.candidateX = piece.x;
+      placement.candidateY = piece.y;
+      placement.candidateFrames = 1;
+    }
+    if (placement.candidateFrames >= ANCHOR_CANDIDATE_FRAMES) {
+      placement.idealX = placement.candidateX;
+      placement.idealY = placement.candidateY;
+      placement.candidateFrames = 0;
+    }
+    return true;
   }
 
   private spawn(track: Track, piece: PieceLayout): void {
@@ -801,96 +896,186 @@ export class PlaceTracker {
       letterSpacing: piece.letterSpacing,
       idealTracking: piece.letterSpacing,
       opacity: 0,
-      rectX: piece.rect.x,
-      rectY: piece.rect.y,
-      rectW: piece.rect.w,
-      rectH: piece.rect.h,
+      collisionOpacity: 0,
       mask: piece.mask,
-      homeX: piece.x,
-      homeY: piece.y,
-      homeScore: 1,
-      rivalX: piece.x,
-      rivalY: piece.y,
-      rivalScore: 0,
+      velocityX: 0,
+      velocityY: 0,
+      candidateX: piece.x,
+      candidateY: piece.y,
+      candidateFrames: 0,
+      collisionHidden: false,
+      collisionChangeSeconds: 0,
       locked: false,
-      avoiding: false,
     });
     this.nextPlacementId += 1;
     if (this.nextPlacementId >= 1000000) this.nextPlacementId = 1;
   }
 
-  private retire(track: Track, placement: Placement): void {
-    if (placement.alive && placement.opacity > 0.15) {
-      track.lastRelocate = this.clock;
-      track.lastX = placement.displayX;
-      track.lastY = placement.displayY;
-    }
+  private retire(placement: Placement): void {
     placement.alive = false;
   }
 
-  private mayAppear(track: Track, x: number, y: number, duplicating: boolean): boolean {
-    if (duplicating) return true;
-    if (track.lastRelocate < 0) return true;
-    const elapsed = this.clock - track.lastRelocate;
-    if (elapsed >= RELOCATE_COOLDOWN_SECONDS) return true;
-    return this.planar(track.lastX, track.lastY, x, y) <= REJOIN_PX;
-  }
-
   private glide(track: Track, placement: Placement, dt: number): void {
-    if (placement.avoiding) {
-      const minTracking = placement.fontSize * MIN_TRACKING_EM;
-      const limits = fontFor(track.kind);
-      if (placement.letterSpacing > minTracking + 0.2) {
-        placement.letterSpacing = Math.max(minTracking, placement.letterSpacing - 10 * dt);
-      } else if (placement.fontSize > limits.min) {
-        placement.fontSize = Math.max(limits.min, placement.fontSize - 6 * dt);
-      }
+    const fontResponse = placement.idealFont < placement.fontSize ? 0.45 : 1.8;
+    const nextFont = approach(placement.fontSize, placement.idealFont, dt, fontResponse, false);
+    const nextTracking = approach(placement.letterSpacing, placement.idealTracking, dt, 1.1, false);
+    const nextAngle = approach(placement.angle, placement.idealAngle, dt, 1.25, false);
+    let currentViolations = placement.mask ? this.geometryViolations(
+      placement.mask,
+      track.text,
+      placement.displayX,
+      placement.displayY,
+      placement.fontSize,
+      placement.letterSpacing,
+      placement.angle,
+    ) : 0;
+    const nextStyleViolations = placement.mask ? this.geometryViolations(
+      placement.mask,
+      track.text,
+      placement.displayX,
+      placement.displayY,
+      nextFont,
+      nextTracking,
+      nextAngle,
+    ) : 0;
+    if (nextStyleViolations <= currentViolations) {
+      placement.fontSize = nextFont;
+      placement.letterSpacing = nextTracking;
+      placement.angle = nextAngle;
+      currentViolations = nextStyleViolations;
     }
-    const dx = (placement.idealX - placement.displayX) * this.viewport.width;
-    const dy = (placement.idealY - placement.displayY) * this.viewport.height;
-    const distance = Math.hypot(dx, dy);
-    if (distance < GLIDE_DEADZONE_PX) return;
-    const step = Math.min(distance - (GLIDE_DEADZONE_PX - 2), MAX_SPEED_PX * dt);
-    if (step <= 0) return;
-    placement.displayX += (dx / distance) * step / this.viewport.width;
-    placement.displayY += (dy / distance) * step / this.viewport.height;
+
+    const width = this.viewport.width;
+    const height = this.viewport.height;
+    let x = placement.displayX * width;
+    let y = placement.displayY * height;
+    const targetX = placement.idealX * width;
+    const targetY = placement.idealY * height;
+    const omega = 2 / POSITION_RESPONSE_SECONDS;
+    let accelerationX = (targetX - x) * omega * omega - 2 * omega * placement.velocityX;
+    let accelerationY = (targetY - y) * omega * omega - 2 * omega * placement.velocityY;
+    const acceleration = Math.hypot(accelerationX, accelerationY);
+    if (acceleration > MAX_ACCELERATION_PX) {
+      accelerationX *= MAX_ACCELERATION_PX / acceleration;
+      accelerationY *= MAX_ACCELERATION_PX / acceleration;
+    }
+    placement.velocityX += accelerationX * dt;
+    placement.velocityY += accelerationY * dt;
+    const speed = Math.hypot(placement.velocityX, placement.velocityY);
+    if (speed > MAX_SPEED_PX) {
+      placement.velocityX *= MAX_SPEED_PX / speed;
+      placement.velocityY *= MAX_SPEED_PX / speed;
+    }
+    x += placement.velocityX * dt;
+    y += placement.velocityY * dt;
+    if (Math.hypot(targetX - x, targetY - y) < 0.3 && Math.hypot(placement.velocityX, placement.velocityY) < 0.5) {
+      x = targetX;
+      y = targetY;
+      placement.velocityX = 0;
+      placement.velocityY = 0;
+    }
+    const nextX = x / width;
+    const nextY = y / height;
+    const nextPositionViolations = placement.mask ? this.geometryViolations(
+      placement.mask,
+      track.text,
+      nextX,
+      nextY,
+      placement.fontSize,
+      placement.letterSpacing,
+      placement.angle,
+    ) : 0;
+    if (nextPositionViolations <= currentViolations) {
+      placement.displayX = nextX;
+      placement.displayY = nextY;
+    } else {
+      placement.velocityX = 0;
+      placement.velocityY = 0;
+    }
   }
 
-  private sitsInside(track: Track, placement: Placement): boolean {
-    if (!placement.mask || this.sampleWidth < 2 || this.sampleHeight < 2) return true;
+  private geometryFits(
+    mask: Uint8Array,
+    text: string,
+    x: number,
+    y: number,
+    fontSize: number,
+    letterSpacing: number,
+    angle: number,
+  ): boolean {
+    return this.geometryViolations(mask, text, x, y, fontSize, letterSpacing, angle) === 0;
+  }
+
+  private geometryViolations(
+    mask: Uint8Array,
+    text: string,
+    x: number,
+    y: number,
+    fontSize: number,
+    letterSpacing: number,
+    angle: number,
+  ): number {
+    if (this.sampleWidth < 2 || this.sampleHeight < 2) return 0;
     const viewW = this.viewport.width;
     const viewH = this.viewport.height;
     const cellW = viewW / this.sampleWidth;
     const cellH = viewH / this.sampleHeight;
-    for (const point of this.labelSamples(track, placement)) {
-      if (point.x < 1 || point.y < 1 || point.x > viewW - 1 || point.y > viewH - 1) return false;
-      const cx = Math.floor(point.x / cellW);
-      const cy = Math.floor(point.y / cellH);
-      if (cx < 0 || cy < 0 || cx >= this.sampleWidth || cy >= this.sampleHeight) return false;
-      if (placement.mask[cx + cy * this.sampleWidth] !== 1) return false;
-    }
-    return true;
-  }
-
-  private labelSamples(track: Track, placement: Placement): Point[] {
-    const centerX = placement.displayX * this.viewport.width;
-    const centerY = placement.displayY * this.viewport.height;
-    const halfW = Math.max(1, this.boxWidth(track.text, placement.fontSize, placement.letterSpacing) / 2 - 2);
-    const halfH = Math.max(1, placement.fontSize * TEXT_HEIGHT_EM / 2 - 2);
-    const radians = placement.angle * Math.PI / 180;
+    const centerX = x * viewW;
+    const centerY = y * viewH;
+    const halfW = Math.max(1, this.boxWidth(text, fontSize, letterSpacing) / 2 - 1);
+    const halfH = Math.max(1, fontSize * TEXT_HEIGHT_EM / 2 - 1);
+    const radians = angle * Math.PI / 180;
     const cosine = Math.cos(radians);
     const sine = Math.sin(radians);
-    const samples: Point[] = [];
-    for (const localX of [-halfW, 0, halfW]) {
-      for (const localY of [-halfH, 0, halfH]) {
-        if (localX === 0 && localY === 0) continue;
-        samples.push({
-          x: centerX + localX * cosine - localY * sine,
-          y: centerY + localX * sine + localY * cosine,
-        });
+    const extent = this.extents(halfW * 2, halfH * 2, Math.abs(cosine), Math.abs(sine));
+    if (
+      centerX - extent.w / 2 < 1
+      || centerY - extent.h / 2 < 1
+      || centerX + extent.w / 2 > viewW - 1
+      || centerY + extent.h / 2 > viewH - 1
+    ) return Number.POSITIVE_INFINITY;
+
+    const sampleStep = Math.max(2, Math.min(cellW, cellH) * 0.45);
+    const columns = Math.max(2, Math.ceil((halfW * 2) / sampleStep));
+    const rows = Math.max(2, Math.ceil((halfH * 2) / sampleStep));
+    let violations = 0;
+    for (let row = 0; row <= rows; row += 1) {
+      const localY = -halfH + (row / rows) * halfH * 2;
+      for (let column = 0; column <= columns; column += 1) {
+        const localX = -halfW + (column / columns) * halfW * 2;
+        const sampleX = centerX + localX * cosine - localY * sine;
+        const sampleY = centerY + localX * sine + localY * cosine;
+        const cellX = Math.floor(sampleX / cellW);
+        const cellY = Math.floor(sampleY / cellH);
+        if (cellX < 0 || cellY < 0 || cellX >= this.sampleWidth || cellY >= this.sampleHeight) {
+          violations += 1;
+          continue;
+        }
+        if (mask[cellX + cellY * this.sampleWidth] !== 1) violations += 1;
       }
     }
-    return samples;
+    return violations;
+  }
+
+  private pathFits(text: string, piece: PieceLayout, startX: number, startY: number): boolean {
+    const distance = this.planar(startX, startY, piece.x, piece.y);
+    const cellW = this.viewport.width / this.sampleWidth;
+    const cellH = this.viewport.height / this.sampleHeight;
+    const pathStep = Math.max(4, Math.min(8, cellW, cellH));
+    const steps = Math.max(1, Math.ceil(distance / pathStep));
+    for (let step = 1; step <= steps; step += 1) {
+      const progress = step / steps;
+      if (!this.geometryFits(
+        piece.mask,
+        text,
+        startX + (piece.x - startX) * progress,
+        startY + (piece.y - startY) * progress,
+        piece.fontSize,
+        piece.letterSpacing,
+        piece.angle,
+      )) return false;
+    }
+    return true;
   }
 
 
@@ -986,12 +1171,113 @@ export class PlaceTracker {
     return pieces;
   }
 
+  private collisionPriority(kind: PlaceKind): number {
+    if (kind === 'lake') return 4;
+    if (kind === 'island') return 3;
+    if (kind === 'continent') return 2;
+    return 1;
+  }
+
+  private placementCorners(track: Track, placement: Placement): Point[] {
+    const centerX = placement.displayX * this.viewport.width;
+    const centerY = placement.displayY * this.viewport.height;
+    const halfW = this.boxWidth(track.text, placement.fontSize, placement.letterSpacing) / 2 + LABEL_COLLISION_PAD_PX;
+    const halfH = placement.fontSize * TEXT_HEIGHT_EM / 2 + LABEL_COLLISION_PAD_PX;
+    const radians = placement.angle * Math.PI / 180;
+    const cosine = Math.cos(radians);
+    const sine = Math.sin(radians);
+    return [
+      { x: -halfW, y: -halfH },
+      { x: halfW, y: -halfH },
+      { x: halfW, y: halfH },
+      { x: -halfW, y: halfH },
+    ].map((point) => ({
+      x: centerX + point.x * cosine - point.y * sine,
+      y: centerY + point.x * sine + point.y * cosine,
+    }));
+  }
+
+  private boxesOverlap(first: Point[], second: Point[]): boolean {
+    for (const polygon of [first, second]) {
+      for (let edge = 0; edge < 2; edge += 1) {
+        const here = polygon[edge];
+        const next = polygon[(edge + 1) % polygon.length];
+        const axisX = -(next.y - here.y);
+        const axisY = next.x - here.x;
+        let firstMin = Number.POSITIVE_INFINITY;
+        let firstMax = Number.NEGATIVE_INFINITY;
+        let secondMin = Number.POSITIVE_INFINITY;
+        let secondMax = Number.NEGATIVE_INFINITY;
+        for (const point of first) {
+          const projection = point.x * axisX + point.y * axisY;
+          firstMin = Math.min(firstMin, projection);
+          firstMax = Math.max(firstMax, projection);
+        }
+        for (const point of second) {
+          const projection = point.x * axisX + point.y * axisY;
+          secondMin = Math.min(secondMin, projection);
+          secondMax = Math.max(secondMax, projection);
+        }
+        if (firstMax <= secondMin || secondMax <= firstMin) return false;
+      }
+    }
+    return true;
+  }
+
+  private resolveCollisions(deltaSeconds: number, snap: boolean): void {
+    const items: Array<{ track: Track; placement: Placement; corners: Point[] }> = [];
+    for (const track of this.tracks.values()) {
+      for (const placement of track.placements) {
+        if ((!placement.alive && placement.opacity <= 0.02) || placement.fontSize < 1) continue;
+        items.push({ track, placement, corners: this.placementCorners(track, placement) });
+      }
+    }
+    items.sort((a, b) => {
+      const kindDifference = this.collisionPriority(b.track.kind) - this.collisionPriority(a.track.kind);
+      if (kindDifference !== 0) return kindDifference;
+      const ageDifference = b.track.age - a.track.age;
+      if (Math.abs(ageDifference) > 0.25) return ageDifference;
+      return a.track.id - b.track.id;
+    });
+
+    const accepted: typeof items = [];
+    for (const item of items) {
+      const blocked = accepted.some((other) => (
+        other.track.id !== item.track.id && this.boxesOverlap(item.corners, other.corners)
+      ));
+      if (blocked === item.placement.collisionHidden) {
+        item.placement.collisionChangeSeconds = 0;
+      } else if (item.placement.opacity < 0.05 && blocked) {
+        item.placement.collisionHidden = true;
+        item.placement.collisionChangeSeconds = 0;
+      } else {
+        item.placement.collisionChangeSeconds += deltaSeconds;
+        const dwell = blocked ? COLLISION_HIDE_DWELL_SECONDS : COLLISION_SHOW_DWELL_SECONDS;
+        if (item.placement.collisionChangeSeconds >= dwell) {
+          item.placement.collisionHidden = blocked;
+          item.placement.collisionChangeSeconds = 0;
+        }
+      }
+      const target = item.placement.collisionHidden ? 0 : 1;
+      const response = item.placement.collisionHidden ? COLLISION_FADE_SECONDS : COLLISION_REVEAL_SECONDS;
+      item.placement.collisionOpacity = clamp(approach(
+        item.placement.collisionOpacity,
+        target,
+        deltaSeconds,
+        response,
+        snap,
+      ), 0, 1);
+      if (!blocked) accepted.push(item);
+    }
+  }
+
   private collect(): PlaceLabel[] {
     const labels: PlaceLabel[] = [];
     const { width, height } = this.viewport;
     for (const track of this.tracks.values()) {
       for (const placement of track.placements) {
-        if (placement.opacity <= 0.015 || placement.fontSize < 1) continue;
+        const opacity = placement.opacity * placement.collisionOpacity;
+        if (opacity <= 0.015 || placement.fontSize < 1) continue;
         labels.push({
           id: placement.id,
           kind: track.kind,
@@ -1000,7 +1286,7 @@ export class PlaceTracker {
           y: placement.displayY * height,
           width: this.boxWidth(track.text, placement.fontSize, placement.letterSpacing),
           height: placement.fontSize * TEXT_HEIGHT_EM,
-          opacity: placement.opacity,
+          opacity,
           fontSize: placement.fontSize,
           letterSpacing: placement.letterSpacing,
           angle: placement.angle,

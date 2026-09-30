@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local GitHub Pages preview: HTTPS on :4000, Jekyll on :4001.
+# Local GitHub Pages preview: Jekyll over HTTP on :4000.
 #   ./scripts/preview          start anything that is down, then print status
 #   ./scripts/preview status   print status only
 #   ./scripts/preview down     stop the stack
@@ -7,13 +7,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUBY_BIN="/opt/homebrew/opt/ruby@3.3/bin"
-HTTPS_PORT="${HTTPS_PORT:-4000}"
-JEKYLL_PORT="${JEKYLL_PORT:-4001}"
+PREVIEW_PORT="${PREVIEW_PORT:-4000}"
+LEGACY_JEKYLL_PORT="${LEGACY_JEKYLL_PORT:-4001}"
 RUN_DIR="${ROOT}/.preview"
 JEKYLL_LOG="${RUN_DIR}/jekyll.log"
-HTTPS_LOG="${RUN_DIR}/https.log"
-CERT="${ROOT}/.certs/lan.crt"
-KEY="${ROOT}/.certs/lan.key"
 
 usage() {
   cat <<EOF
@@ -21,11 +18,11 @@ Usage: ./scripts/preview [status|up|down]
 
   status   who is listening
   up       start missing processes; no-op if already running
-  down     stop Jekyll :${JEKYLL_PORT} and HTTPS :${HTTPS_PORT}
+  down     stop Jekyll :${PREVIEW_PORT}
 
   ./scripts/preview          same as up, then status
 
-Preview: https://127.0.0.1:${HTTPS_PORT}/
+Preview: http://127.0.0.1:${PREVIEW_PORT}/
 EOF
 }
 
@@ -35,24 +32,13 @@ listen_pid() {
 }
 
 print_status() {
-  local jp hp
-  jp="$(listen_pid "${JEKYLL_PORT}")"
-  hp="$(listen_pid "${HTTPS_PORT}")"
+  local jp
+  jp="$(listen_pid "${PREVIEW_PORT}")"
   if [[ -n "${jp}" ]]; then
-    echo "jekyll  :${JEKYLL_PORT}  up    pid ${jp}"
+    echo "jekyll  :${PREVIEW_PORT}  up    pid ${jp}"
+    echo "preview http://127.0.0.1:${PREVIEW_PORT}/"
   else
-    echo "jekyll  :${JEKYLL_PORT}  down"
-  fi
-  if [[ -n "${hp}" ]]; then
-    echo "https   :${HTTPS_PORT}  up    pid ${hp}"
-  else
-    echo "https   :${HTTPS_PORT}  down"
-  fi
-  if [[ -n "${jp}" && -n "${hp}" ]]; then
-    echo "preview https://127.0.0.1:${HTTPS_PORT}/"
-  elif [[ -n "${jp}" ]]; then
-    echo "preview http://127.0.0.1:${JEKYLL_PORT}/  (HTTPS proxy is down)"
-  else
+    echo "jekyll  :${PREVIEW_PORT}  down"
     echo "preview down  — run: ./scripts/preview up"
   fi
 }
@@ -94,10 +80,9 @@ PY
 cmd_up() {
   mkdir -p "${RUN_DIR}"
   export PATH="${RUBY_BIN}:${PATH}"
-  export HTTPS_PORT JEKYLL_PORT
   export PREVIEW_ROOT="${ROOT}"
 
-  if [[ -z "$(listen_pid "${JEKYLL_PORT}")" ]]; then
+  if [[ -z "$(listen_pid "${PREVIEW_PORT}")" ]]; then
     if [[ ! -x "${RUBY_BIN}/ruby" ]]; then
       echo "Ruby 3.3 is missing. Install it with: brew install ruby@3.3" >&2
       exit 1
@@ -107,25 +92,16 @@ cmd_up() {
       bundle config set --local path vendor/bundle
       bundle install
     fi
-    echo "starting jekyll :${JEKYLL_PORT}"
-    daemonize "${JEKYLL_LOG}" bundle exec jekyll serve --host 127.0.0.1 --port "${JEKYLL_PORT}" --baseurl=""
-    wait_port "${JEKYLL_PORT}" "jekyll"
-  fi
-
-  if [[ -z "$(listen_pid "${HTTPS_PORT}")" ]]; then
-    if [[ ! -f "${CERT}" || ! -f "${KEY}" ]]; then
-      echo "Missing TLS certs: ${CERT} and ${KEY}" >&2
-      exit 1
-    fi
-    echo "starting https :${HTTPS_PORT}"
-    daemonize "${HTTPS_LOG}" node "${ROOT}/scripts/https-lan.mjs"
-    wait_port "${HTTPS_PORT}" "https"
+    echo "starting jekyll :${PREVIEW_PORT}"
+    daemonize "${JEKYLL_LOG}" bundle exec jekyll serve --host 127.0.0.1 --port "${PREVIEW_PORT}" --baseurl=""
+    wait_port "${PREVIEW_PORT}" "jekyll"
   fi
 }
 
 cmd_down() {
   local p
-  for p in "$(listen_pid "${HTTPS_PORT}")" "$(listen_pid "${JEKYLL_PORT}")"; do
+  # Also stop the old :4001 backend during migration from the HTTPS proxy stack.
+  for p in "$(listen_pid "${PREVIEW_PORT}")" "$(listen_pid "${LEGACY_JEKYLL_PORT}")"; do
     if [[ -n "${p}" ]]; then
       kill "${p}" 2>/dev/null || true
     fi

@@ -17,7 +17,7 @@ npm run build
 ```
 
 The production build is written to `ising/`. Preview it through the parent
-playground at `https://127.0.0.1:4000/ising/`.
+playground at `http://127.0.0.1:4000/ising/`.
 
 ## Controls
 

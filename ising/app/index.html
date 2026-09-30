@@ -93,6 +93,17 @@
       </dl>
     </section>
 
+    <div class="temperature-paddles" role="group" aria-label="Temporary temperature controls">
+      <button class="temperature-paddle freeze-paddle" id="freeze" type="button" aria-pressed="false">
+        <span class="temperature-progress" aria-hidden="true"></span>
+        <span class="temperature-paddle-label">Freeze</span>
+      </button>
+      <button class="temperature-paddle heat-paddle" id="heat" type="button" aria-pressed="false">
+        <span class="temperature-progress" aria-hidden="true"></span>
+        <span class="temperature-paddle-label">Heat</span>
+      </button>
+    </div>
+
     <div class="hint">Wheel or pinch: scale · [ ]: brush</div>
     <div class="legend"><span>−1</span><i></i><span>+1</span></div>
     <div class="fatal-error" id="fatal-error" hidden></div>

@@ -28,6 +28,8 @@ const settingsPanel = byId<HTMLElement>('settings-panel');
 const pauseButton = byId<HTMLButtonElement>('pause');
 const restartButton = byId<HTMLButtonElement>('restart');
 const clearBlueButton = byId<HTMLButtonElement>('clear-blue');
+const freezeButton = byId<HTMLButtonElement>('freeze');
+const heatButton = byId<HTMLButtonElement>('heat');
 const phaseValue = byId<HTMLElement>('phase');
 const magnetizationValue = byId<HTMLElement>('magnetization');
 const energyValue = byId<HTMLElement>('energy');
@@ -53,6 +55,7 @@ async function main(): Promise<void> {
 
   const simulation = new GpuIsing(gpu.device, gpu.format, canvas);
   let temperature = Number(temperatureInput.value);
+  let baseTemperature = temperature;
   let scale = Number(scaleInput.value);
   let targetScale = scale;
   let timeSpeed = Number(timeSpeedInput.value);
@@ -83,7 +86,13 @@ async function main(): Promise<void> {
   let lastRegionRequest = 0;
   const places = new PlaceTracker();
   const labelNodes = new Map<number, HTMLSpanElement[]>();
+  const freezeHolds = new Set<string>();
+  const heatHolds = new Set<string>();
   const CHAOS_TEMPERATURE = CRITICAL_TEMPERATURE + 0.2;
+  const MIN_TEMPERATURE = Number(temperatureInput.min);
+  const MAX_TEMPERATURE = Number(temperatureInput.max);
+  const HOLD_RESPONSE_SECONDS = 1.35;
+  const RETURN_RESPONSE_SECONDS = 0.75;
 
   const targetGrid = (): { density: number; width: number; height: number } => {
     const viewportWidth = Math.max(1, window.innerWidth);
@@ -119,7 +128,15 @@ async function main(): Promise<void> {
   };
 
   const updateTemperatureInterface = (): void => {
+    temperatureInput.value = temperature.toFixed(2);
     temperatureValue.textContent = `T = ${temperature.toFixed(2)}`;
+    const temperatureProgress = Math.max(0, Math.min(1, (
+      temperature - MIN_TEMPERATURE
+    ) / (MAX_TEMPERATURE - MIN_TEMPERATURE)));
+    freezeButton.style.setProperty('--temperature-progress', (1 - temperatureProgress).toFixed(4));
+    heatButton.style.setProperty('--temperature-progress', temperatureProgress.toFixed(4));
+    freezeButton.setAttribute('aria-label', `Freeze, current temperature ${temperature.toFixed(2)}`);
+    heatButton.setAttribute('aria-label', `Heat, current temperature ${temperature.toFixed(2)}`);
     const distance = temperature - CRITICAL_TEMPERATURE;
     if (distance < -0.2) phaseValue.textContent = 'ordered';
     else if (distance > 0.2) phaseValue.textContent = 'disordered';
@@ -153,7 +170,7 @@ async function main(): Promise<void> {
     renderDirty = false;
   };
 
-  const invalidatePlaces = (): void => {
+  const resetPlaces = (): void => {
     placesGeneration += 1;
     places.reset();
     syncPlaceLabels([]);
@@ -201,7 +218,9 @@ async function main(): Promise<void> {
     renderDirty = true;
     drawNow();
     statsGeneration += 1;
-    invalidatePlaces();
+    // Discard any sample taken against the previous GPU dimensions, but keep
+    // place identity and normalized label positions across viewport resizes.
+    placesGeneration += 1;
   };
 
   const pointerPoint = (event: PointerEvent): Point | null => {
@@ -278,9 +297,58 @@ async function main(): Promise<void> {
   });
 
   temperatureInput.addEventListener('input', () => {
-    temperature = Number(temperatureInput.value);
+    baseTemperature = Number(temperatureInput.value);
+    temperature = baseTemperature;
     updateTemperatureInterface();
   });
+
+  const bindTemperatureHold = (
+    button: HTMLButtonElement,
+    holds: Set<string>,
+  ): void => {
+    const updatePressed = (): void => {
+      button.setAttribute('aria-pressed', String(holds.size > 0));
+    };
+    const releasePointer = (event: PointerEvent): void => {
+      holds.delete(`pointer:${event.pointerId}`);
+      if (button.hasPointerCapture(event.pointerId)) button.releasePointerCapture(event.pointerId);
+      updatePressed();
+    };
+    button.addEventListener('pointerdown', (event) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      event.preventDefault();
+      button.setPointerCapture(event.pointerId);
+      holds.add(`pointer:${event.pointerId}`);
+      updatePressed();
+    });
+    button.addEventListener('pointerup', releasePointer);
+    button.addEventListener('pointercancel', releasePointer);
+    button.addEventListener('lostpointercapture', (event) => {
+      holds.delete(`pointer:${event.pointerId}`);
+      updatePressed();
+    });
+    button.addEventListener('keydown', (event) => {
+      if (event.code !== 'Space' && event.code !== 'Enter') return;
+      event.preventDefault();
+      holds.add(`key:${event.code}`);
+      updatePressed();
+    });
+    button.addEventListener('keyup', (event) => {
+      if (event.code !== 'Space' && event.code !== 'Enter') return;
+      event.preventDefault();
+      holds.delete(`key:${event.code}`);
+      updatePressed();
+    });
+    button.addEventListener('blur', () => {
+      for (const hold of holds) {
+        if (hold.startsWith('key:')) holds.delete(hold);
+      }
+      updatePressed();
+    });
+  };
+
+  bindTemperatureHold(freezeButton, freezeHolds);
+  bindTemperatureHold(heatButton, heatHolds);
 
   timeSpeedInput.addEventListener('input', () => {
     timeSpeed = Number(timeSpeedInput.value);
@@ -323,7 +391,7 @@ async function main(): Promise<void> {
     forceHotBrush = false;
     stepAccumulator = 0;
     statsGeneration += 1;
-    invalidatePlaces();
+    resetPlaces();
     magnetizationValue.textContent = '0.000';
     energyValue.textContent = '0.000';
     renderDirty = true;
@@ -336,7 +404,7 @@ async function main(): Promise<void> {
     forceHotBrush = true;
     stepAccumulator = 0;
     statsGeneration += 1;
-    invalidatePlaces();
+    resetPlaces();
     magnetizationValue.textContent = '1.000';
     energyValue.textContent = '-2.000';
     renderDirty = true;
@@ -457,6 +525,10 @@ async function main(): Promise<void> {
     activePointers.clear();
     pinchActive = false;
     touchPaintPending = false;
+    freezeHolds.clear();
+    heatHolds.clear();
+    freezeButton.setAttribute('aria-pressed', 'false');
+    heatButton.setAttribute('aria-pressed', 'false');
     renderDirty = true;
   });
 
@@ -485,6 +557,24 @@ async function main(): Promise<void> {
       scale = targetScale;
       updateScaleInterface();
       renderDirty = true;
+    }
+
+    const temperatureDirection = Number(heatHolds.size > 0) - Number(freezeHolds.size > 0);
+    const targetTemperature = temperatureDirection < 0
+      ? MIN_TEMPERATURE
+      : temperatureDirection > 0
+        ? MAX_TEMPERATURE
+        : baseTemperature;
+    const temperatureResponse = temperatureDirection === 0
+      ? RETURN_RESPONSE_SECONDS
+      : HOLD_RESPONSE_SECONDS;
+    const temperatureDifference = targetTemperature - temperature;
+    if (Math.abs(temperatureDifference) > 0.0005) {
+      temperature += temperatureDifference * (1 - Math.exp(-deltaSeconds / temperatureResponse));
+      updateTemperatureInterface();
+    } else if (temperature !== targetTemperature) {
+      temperature = targetTemperature;
+      updateTemperatureInterface();
     }
 
     if (!paused) {
