@@ -63,6 +63,7 @@ type Placement = {
 
 type PieceLayout = {
   mask: Uint8Array;
+  regionMask: Uint8Array;
   area: number;
   rect: SolidRect;
   x: number;
@@ -106,6 +107,7 @@ const MISSING_DROP_SECONDS = 3.2;
 const MIN_TRACKING_EM = 0.12;
 const MAX_TRACKING_EM = 0.28;
 const MAX_SPEED_PX = 30;
+const RECOVERY_SPEED_PX = 48;
 const MAX_ACCELERATION_PX = 120;
 const POSITION_RESPONSE_SECONDS = 0.85;
 const TEXT_HEIGHT_EM = 1.35;
@@ -117,6 +119,7 @@ const ANCHOR_CANDIDATE_FRAMES = 8;
 const TEMPORAL_HISTORY_LENGTH = 8;
 const TEMPORAL_OCCUPANCY = 0.625;
 const LABEL_COLLISION_PAD_PX = 7;
+const LABEL_COAST_CLEARANCE_PX = 8;
 const COLLISION_FADE_SECONDS = 0.22;
 const COLLISION_REVEAL_SECONDS = 0.7;
 const COLLISION_HIDE_DWELL_SECONDS = 0.35;
@@ -181,6 +184,8 @@ const candidateRects = (
   height: number,
   minW: number,
   minH: number,
+  targetX: number,
+  targetY: number,
 ): SolidRect[] => {
   const heights = new Int32Array(width);
   const stack = new Int32Array(width + 1);
@@ -188,12 +193,16 @@ const candidateRects = (
     any: null as SolidRect | null,
     wide: null as SolidRect | null,
     tall: null as SolidRect | null,
+    centered: null as SolidRect | null,
     anyArea: 0,
     wideArea: 0,
     tallArea: 0,
+    centeredArea: 0,
+    centerDistance: Number.POSITIVE_INFINITY,
   };
   const consider = (rect: SolidRect): void => {
     const area = rect.w * rect.h;
+    const centerDistance = Math.hypot(rect.x + rect.w / 2 - targetX, rect.y + rect.h / 2 - targetY);
     if (area > best.anyArea) {
       best.anyArea = area;
       best.any = rect;
@@ -205,6 +214,14 @@ const candidateRects = (
     if (rect.h >= rect.w * 1.35 && area > best.tallArea) {
       best.tallArea = area;
       best.tall = rect;
+    }
+    if (
+      centerDistance < best.centerDistance - 0.25
+      || (Math.abs(centerDistance - best.centerDistance) <= 0.25 && area > best.centeredArea)
+    ) {
+      best.centerDistance = centerDistance;
+      best.centeredArea = area;
+      best.centered = rect;
     }
   };
   for (let y = 0; y < height; y += 1) {
@@ -228,6 +245,7 @@ const candidateRects = (
   if (best.any) rects.push(best.any);
   if (best.wide && rects.every((rect) => !same(rect, best.wide as SolidRect))) rects.push(best.wide);
   if (best.tall && rects.every((rect) => !same(rect, best.tall as SolidRect))) rects.push(best.tall);
+  if (best.centered && rects.every((rect) => !same(rect, best.centered as SolidRect))) rects.push(best.centered);
   return rects;
 };
 
@@ -265,7 +283,7 @@ const extractRegions = (signs: Int8Array, width: number, height: number): Region
 };
 
 const fontFor = (kind: PlaceKind): { min: number; max: number } => {
-  if (kind === 'continent') return { min: 22, max: 38 };
+  if (kind === 'continent') return { min: 22, max: 64 };
   if (kind === 'sea') return { min: 18, max: 30 };
   return { min: 16, max: 20 };
 };
@@ -537,41 +555,76 @@ export class PlaceTracker {
       const stableMask = this.temporalMask(piece.mask, track.history);
       const interior = this.readInterior(stableMask) ?? this.readInterior(piece.mask);
       if (!interior) continue;
+      const coastFloor = Math.max(2, Math.ceil(LABEL_COAST_CLEARANCE_PX / Math.min(cellX, cellY)));
+      const coastSafe = new Uint8Array(stableMask.length);
+      let coastSafeCells = 0;
+      for (let index = 0; index < coastSafe.length; index += 1) {
+        if (stableMask[index] !== 1 || interior.dist[index] < coastFloor) continue;
+        coastSafe[index] = 1;
+        coastSafeCells += 1;
+      }
+      if (coastSafeCells === 0) continue;
       const thick: number[] = [];
       const floor = Math.max(1, Math.floor(interior.max * 0.45));
       for (let index = 0; index < piece.mask.length; index += 1) {
         if (piece.mask[index] === 1 && interior.dist[index] >= floor) thick.push(index);
       }
       const preferred = this.preferredAngle(thick.length >= 4 ? thick : interior.cells);
-      const eroded = new Uint8Array(stableMask.length);
-      const inset = Math.max(1, Math.floor(interior.max * 0.35));
-      if (inset > 1) {
-        for (let index = 0; index < eroded.length; index += 1) {
-          if (stableMask[index] === 1 && interior.dist[index] >= inset) eroded[index] = 1;
-        }
+      let centroidCellX = 0;
+      let centroidCellY = 0;
+      for (const index of interior.cells) {
+        centroidCellX += (index % width) + 0.5;
+        centroidCellY += Math.floor(index / width) + 0.5;
       }
-      let best: { rect: SolidRect; fit: { fontSize: number; letterSpacing: number; angle: number } } | null = null;
-      for (const candidate of inset > 1 ? [eroded, stableMask, piece.mask] : [stableMask, piece.mask]) {
-        for (const rect of candidateRects(candidate, width, height, minW, minH)) {
+      centroidCellX /= interior.cells.length;
+      centroidCellY /= interior.cells.length;
+      const centroidX = (centroidCellX * cellX) / viewW;
+      const centroidY = (centroidCellY * cellY) / viewH;
+      const eroded = new Uint8Array(stableMask.length);
+      const inset = Math.max(coastFloor, Math.floor(interior.max * 0.35));
+      for (let index = 0; index < eroded.length; index += 1) {
+        if (coastSafe[index] === 1 && interior.dist[index] >= inset) eroded[index] = 1;
+      }
+      type LayoutOption = {
+        rect: SolidRect;
+        fit: { fontSize: number; letterSpacing: number; angle: number };
+        x: number;
+        y: number;
+        distance: number;
+      };
+      let best: LayoutOption | null = null;
+      for (const candidate of [eroded, coastSafe]) {
+        const options: LayoutOption[] = [];
+        for (const rect of candidateRects(candidate, width, height, minW, minH, centroidCellX, centroidCellY)) {
           const fit = this.chooseFit(track.text, track.kind, rect, preferred);
           if (!fit) continue;
-          const better = !best
-            || fit.fontSize > best.fit.fontSize + 1
-            || (Math.abs(fit.fontSize - best.fit.fontSize) <= 1 && rect.w * rect.h > best.rect.w * best.rect.h);
-          if (better) best = { rect, fit };
+          const bounds = this.limitsFor(rect, track.text, fit.fontSize, fit.letterSpacing, fit.angle);
+          if (!bounds) continue;
+          const x = clamp(centroidX, bounds.l, bounds.r);
+          const y = clamp(centroidY, bounds.t, bounds.b);
+          options.push({
+            rect,
+            fit,
+            x,
+            y,
+            distance: this.planar(x, y, centroidX, centroidY),
+          });
         }
-        if (best) break;
+        if (options.length === 0) continue;
+        const maxFont = Math.max(...options.map((option) => option.fit.fontSize));
+        const nearLargest = options.filter((option) => option.fit.fontSize >= maxFont * 0.84);
+        nearLargest.sort((a, b) => a.distance - b.distance || b.fit.fontSize - a.fit.fontSize);
+        best = nearLargest[0];
+        break;
       }
       if (!best) continue;
-      const aimX = interior.x / viewW;
-      const aimY = interior.y / viewH;
-      const bounds = this.limitsFor(best.rect, track.text, best.fit.fontSize, best.fit.letterSpacing, best.fit.angle);
       layouts.push({
-        mask: piece.mask,
+        mask: coastSafe,
+        regionMask: piece.mask,
         area: piece.area,
         rect: best.rect,
-        x: bounds ? clamp(aimX, bounds.l, bounds.r) : aimX,
-        y: bounds ? clamp(aimY, bounds.t, bounds.b) : aimY,
+        x: best.x,
+        y: best.y,
         fontSize: best.fit.fontSize,
         letterSpacing: best.fit.letterSpacing,
         angle: best.fit.angle,
@@ -830,7 +883,7 @@ export class PlaceTracker {
   private adopt(track: Track, placement: Placement, piece: PieceLayout): boolean {
     const relocationDistance = this.planar(placement.displayX, placement.displayY, piece.x, piece.y);
     const centerIndex = this.cellIndex(placement.displayX, placement.displayY);
-    const centerStillInside = centerIndex >= 0 && piece.mask[centerIndex] === 1;
+    const centerStillInside = centerIndex >= 0 && piece.regionMask[centerIndex] === 1;
     if (placement.locked) {
       if (!centerStillInside && relocationDistance > MAX_GLIDE_DISTANCE_PX) return false;
       if (!centerStillInside && !this.pathFits(track.text, piece, placement.displayX, placement.displayY)) return false;
@@ -856,6 +909,20 @@ export class PlaceTracker {
     placement.idealFont += (piece.fontSize - placement.idealFont) * styleBlend;
     placement.idealTracking += (piece.letterSpacing - placement.idealTracking) * styleBlend;
     placement.idealAngle += (piece.angle - placement.idealAngle) * 0.18;
+    if (!this.geometryFits(
+      piece.mask,
+      track.text,
+      placement.displayX,
+      placement.displayY,
+      placement.fontSize,
+      placement.letterSpacing,
+      placement.angle,
+    )) {
+      placement.idealX = piece.x;
+      placement.idealY = piece.y;
+      placement.candidateFrames = 0;
+      return true;
+    }
     const targetDistance = this.planar(placement.idealX, placement.idealY, piece.x, piece.y);
     if (targetDistance <= ANCHOR_ACCEPT_PX) {
       placement.idealX += (piece.x - placement.idealX) * 0.18;
@@ -938,7 +1005,7 @@ export class PlaceTracker {
       nextTracking,
       nextAngle,
     ) : 0;
-    if (nextStyleViolations <= currentViolations) {
+    if (Number.isFinite(nextStyleViolations) && nextStyleViolations <= currentViolations) {
       placement.fontSize = nextFont;
       placement.letterSpacing = nextTracking;
       placement.angle = nextAngle;
@@ -962,9 +1029,10 @@ export class PlaceTracker {
     placement.velocityX += accelerationX * dt;
     placement.velocityY += accelerationY * dt;
     const speed = Math.hypot(placement.velocityX, placement.velocityY);
-    if (speed > MAX_SPEED_PX) {
-      placement.velocityX *= MAX_SPEED_PX / speed;
-      placement.velocityY *= MAX_SPEED_PX / speed;
+    const speedLimit = currentViolations > 0 ? RECOVERY_SPEED_PX : MAX_SPEED_PX;
+    if (speed > speedLimit) {
+      placement.velocityX *= speedLimit / speed;
+      placement.velocityY *= speedLimit / speed;
     }
     x += placement.velocityX * dt;
     y += placement.velocityY * dt;
@@ -985,12 +1053,45 @@ export class PlaceTracker {
       placement.letterSpacing,
       placement.angle,
     ) : 0;
-    if (nextPositionViolations <= currentViolations) {
+    if (Number.isFinite(nextPositionViolations) && nextPositionViolations <= currentViolations) {
       placement.displayX = nextX;
       placement.displayY = nextY;
     } else {
-      placement.velocityX = 0;
-      placement.velocityY = 0;
+      const stepX = x - placement.displayX * width;
+      const stepY = y - placement.displayY * height;
+      let steered: { x: number; y: number; distance: number } | null = null;
+      for (const degrees of [30, -30, 60, -60, 90, -90]) {
+        const radians = degrees * Math.PI / 180;
+        const cosine = Math.cos(radians);
+        const sine = Math.sin(radians);
+        const candidateX = placement.displayX + (stepX * cosine - stepY * sine) / width;
+        const candidateY = placement.displayY + (stepX * sine + stepY * cosine) / height;
+        const violations = placement.mask ? this.geometryViolations(
+          placement.mask,
+          track.text,
+          candidateX,
+          candidateY,
+          placement.fontSize,
+          placement.letterSpacing,
+          placement.angle,
+        ) : 0;
+        if (!Number.isFinite(violations) || violations > currentViolations) continue;
+        const distance = this.planar(candidateX, candidateY, placement.idealX, placement.idealY);
+        if (!steered || distance < steered.distance) steered = { x: candidateX, y: candidateY, distance };
+      }
+      if (steered) {
+        const previousX = placement.displayX;
+        const previousY = placement.displayY;
+        placement.displayX = steered.x;
+        placement.displayY = steered.y;
+        if (dt > 0) {
+          placement.velocityX = ((steered.x - previousX) * width) / dt;
+          placement.velocityY = ((steered.y - previousY) * height) / dt;
+        }
+      } else {
+        placement.velocityX = 0;
+        placement.velocityY = 0;
+      }
     }
   }
 

@@ -1,0 +1,12 @@
+{
+  "git.autoRepositoryDetection": "subFolders",
+  "git.detectSubmodules": true,
+  "git.detectSubmodulesLimit": 20,
+  "git.repositoryScanMaxDepth": 1,
+  "git.scanRepositories": [
+    "4d",
+    "fractal",
+    "hilbert",
+    "narration"
+  ]
+}
