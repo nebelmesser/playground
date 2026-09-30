@@ -55,7 +55,6 @@ const speedRow = element<HTMLElement>('#speed-row');
 const scaleValue = element<HTMLOutputElement>('#scale-value');
 const phaseValue = element<HTMLOutputElement>('#phase-value');
 const speedValue = element<HTMLOutputElement>('#speed-value');
-const speedPeriod = element<HTMLElement>('#speed-period');
 const autoScaleValue = element<HTMLElement>('#auto-scale');
 
 const STORAGE_KEY = 'escher-workspace-v1';
@@ -233,12 +232,9 @@ function formatClock(seconds: number): string {
 function updateVideoDurationLabel(): void {
   const frames = cycleFrameCount(Number(speedInput.value));
   if (frames === null) {
-    speedPeriod.textContent = 'A speed of zero holds the picture, so there is no loop to export.';
     mp4Duration.textContent = '—';
   } else {
-    const loopSeconds = frames / VIDEO_FPS;
-    const totalSeconds = loopSeconds * selectedVideoCycles();
-    speedPeriod.textContent = `One loop takes ${formatClock(loopSeconds)} s at this speed.`;
+    const totalSeconds = frames / VIDEO_FPS * selectedVideoCycles();
     mp4Duration.textContent = totalSeconds >= 60 ? formatClock(totalSeconds) : `${formatClock(totalSeconds)} SEC`;
   }
   if (!exporting) mp4Button.disabled = renderer === null || frames === null;
