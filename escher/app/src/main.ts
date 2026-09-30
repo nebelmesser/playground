@@ -1,8 +1,9 @@
 import './style.css';
 import { SourceEditor, type FrameSelection } from './editor';
+import { polygonCentroid } from './math';
 import { DrosteRenderer, type OutputCrop, type RenderState } from './renderer';
 import {
-  VIDEO_FRAME_COUNT,
+  VIDEO_FPS,
   VIDEO_PRESETS,
   encodeMp4,
   isVideoPreset,
@@ -54,11 +55,16 @@ const speedRow = element<HTMLElement>('#speed-row');
 const scaleValue = element<HTMLOutputElement>('#scale-value');
 const phaseValue = element<HTMLOutputElement>('#phase-value');
 const speedValue = element<HTMLOutputElement>('#speed-value');
+const speedPeriod = element<HTMLElement>('#speed-period');
 const autoScaleValue = element<HTMLElement>('#auto-scale');
 
 const STORAGE_KEY = 'escher-workspace-v1';
 
+/** Phase advanced per millisecond when speed is 1. The live preview and the MP4 cycle share this rate. */
+const PHASE_PER_MILLISECOND = 0.00012;
+
 const OUTPUT_ASPECTS = [
+  { value: 'original', label: 'ORIGINAL', ratio: null },
   { value: '2:3', label: '2:3', ratio: 2 / 3 },
   { value: '3:4', label: '3:4', ratio: 3 / 4 },
   { value: '9:16', label: '9:16', ratio: 9 / 16 },
@@ -158,16 +164,24 @@ function outputFrame(): { width: number; height: number; crop: OutputCrop } {
   const outer = editor.selection.outer;
   const fullWidth = Math.max(1, Math.round(editor.width * (outer[1].x - outer[0].x)));
   const fullHeight = Math.max(1, Math.round(editor.height * (outer[3].y - outer[0].y)));
-  const ratio = OUTPUT_ASPECTS.find((aspect) => aspect.value === selectedOutputAspect())?.ratio ?? 1;
+  const ratio = OUTPUT_ASPECTS.find((aspect) => aspect.value === selectedOutputAspect())?.ratio ?? null;
+  if (ratio === null) {
+    return { width: fullWidth, height: fullHeight, crop: { x: 0, y: 0, width: 1, height: 1 } };
+  }
   const sourceAspect = fullWidth / fullHeight;
   const cropWidth = ratio > sourceAspect ? 1 : ratio / sourceAspect;
   const cropHeight = ratio > sourceAspect ? sourceAspect / ratio : 1;
+  const center = polygonCentroid(editor.selection.inner);
+  const outerWidth = Math.max(outer[1].x - outer[0].x, 1e-6);
+  const outerHeight = Math.max(outer[3].y - outer[0].y, 1e-6);
+  const centerU = (center.x - outer[0].x) / outerWidth;
+  const centerV = (center.y - outer[0].y) / outerHeight;
   return {
     width: Math.max(1, Math.round(fullWidth * cropWidth)),
     height: Math.max(1, Math.round(fullHeight * cropHeight)),
     crop: {
-      x: (1 - cropWidth) / 2,
-      y: (1 - cropHeight) / 2,
+      x: Math.min(Math.max(centerU - cropWidth / 2, 0), 1 - cropWidth),
+      y: Math.min(Math.max(centerV - cropHeight / 2, 0), 1 - cropHeight),
       width: cropWidth,
       height: cropHeight,
     },
@@ -199,9 +213,35 @@ function selectedVideoCycles(): number {
   return isVideoCycles(cycles) ? cycles : 1;
 }
 
+function cycleFrameCount(speed: number): number | null {
+  const magnitude = Math.abs(speed);
+  if (magnitude === 0) return null;
+  return Math.max(1, Math.round(VIDEO_FPS / (magnitude * PHASE_PER_MILLISECOND * 1000)));
+}
+
+function formatClock(seconds: number): string {
+  if (seconds >= 60) {
+    const total = Math.round(seconds);
+    const minutes = Math.floor(total / 60);
+    const rest = total % 60;
+    return `${minutes}:${String(rest).padStart(2, '0')}`;
+  }
+  const tenths = Math.round(seconds * 10) / 10;
+  return Number.isInteger(tenths) ? tenths.toFixed(0) : tenths.toFixed(1);
+}
+
 function updateVideoDurationLabel(): void {
-  const seconds = selectedVideoCycles() * 4;
-  mp4Duration.textContent = `${String(seconds).padStart(2, '0')} SEC`;
+  const frames = cycleFrameCount(Number(speedInput.value));
+  if (frames === null) {
+    speedPeriod.textContent = 'A speed of zero holds the picture, so there is no loop to export.';
+    mp4Duration.textContent = '—';
+  } else {
+    const loopSeconds = frames / VIDEO_FPS;
+    const totalSeconds = loopSeconds * selectedVideoCycles();
+    speedPeriod.textContent = `One loop takes ${formatClock(loopSeconds)} s at this speed.`;
+    mp4Duration.textContent = totalSeconds >= 60 ? formatClock(totalSeconds) : `${formatClock(totalSeconds)} SEC`;
+  }
+  if (!exporting) mp4Button.disabled = renderer === null || frames === null;
 }
 
 function selectedVideoSize(): { width: number; height: number } {
@@ -271,7 +311,7 @@ function renderFrame(time: number): void {
 
   if (animateInput.checked) {
     const speed = Number(speedInput.value);
-    phase = (phase + delta * speed * 0.00012 + 1) % 1;
+    phase = (phase + delta * speed * PHASE_PER_MILLISECOND + 1) % 1;
     updatePhaseUi();
     dirty = true;
   }
@@ -307,6 +347,7 @@ function updateControlReadouts(): void {
   speedValue.textContent = `${Number(speedInput.value).toFixed(2)}×`;
   speedRow.setAttribute('aria-disabled', String(!animateInput.checked));
   updatePhaseUi();
+  updateVideoDurationLabel();
 }
 updateControlReadouts();
 
@@ -577,10 +618,17 @@ mp4Button.addEventListener('click', () => void exportMp4());
 
 async function exportMp4(): Promise<void> {
   if (!renderer || exporting) return;
+  const speed = Number(speedInput.value);
+  const framesPerCycle = cycleFrameCount(speed);
+  if (framesPerCycle === null) {
+    exportNote.textContent = 'Set a speed other than zero before exporting video.';
+    updateVideoDurationLabel();
+    return;
+  }
   const stillPhase = phase;
   const wasAnimating = animateInput.checked;
   const size = selectedVideoSize();
-  const frameCount = VIDEO_FRAME_COUNT * selectedVideoCycles();
+  const frameCount = framesPerCycle * selectedVideoCycles();
   try {
     exporting = true;
     mp4Button.disabled = true;
@@ -598,7 +646,10 @@ async function exportMp4(): Promise<void> {
       height: size.height,
       frameCount,
       drawFrame: (index) => {
-        phase = (index % VIDEO_FRAME_COUNT) / VIDEO_FRAME_COUNT;
+        const within = index % framesPerCycle;
+        phase = speed >= 0
+          ? within / framesPerCycle
+          : (framesPerCycle - within) % framesPerCycle / framesPerCycle;
         renderer?.render(currentRenderState(), size);
         renderer?.finish();
       },
@@ -619,7 +670,6 @@ async function exportMp4(): Promise<void> {
     animateInput.checked = wasAnimating;
     previousFrameTime = performance.now();
     updateControlReadouts();
-    mp4Button.disabled = false;
     pngButton.disabled = false;
     videoResolutionSelect.disabled = false;
     videoCyclesSelect.disabled = false;

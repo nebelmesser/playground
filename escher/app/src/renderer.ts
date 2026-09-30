@@ -132,9 +132,8 @@ vec2 foldToSourceFrame(vec2 point) {
 }
 
 vec4 sampleDroste(vec2 uv) {
-  // The result is a centered crop of OUTER. uOutputCrop is that window in
-  // OUTER's own 0–1 coordinates, so a chosen aspect trims the picture without
-  // moving the source frames.
+  // uOutputCrop is a window in OUTER's 0–1 coordinates. Its center follows the
+  // inner frame, so the central area stays in the middle of the chosen aspect.
   vec2 frameUv = uOutputCrop.xy + uv * uOutputCrop.zw;
   vec2 outputPoint = vec2(
     mix(uOuterQuad[0].x, uOuterQuad[1].x, frameUv.x),

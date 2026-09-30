@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#11100e" />
     <meta name="description" content="A real-time perspective-aware Escher Droste image transformer." />
     <title>Escher Droste Effect Editor</title>
-    <script type="module" src="./assets/escher.js?v=mun2emp8"></script>
-    <link rel="stylesheet" href="./assets/escher.css?v=mun2emp8">
+    <script type="module" src="./assets/escher.js?v=munwaupv"></script>
+    <link rel="stylesheet" href="./assets/escher.css?v=munwaupv">
   </head>
   <body>
     <div class="app-shell" id="app">
@@ -57,6 +57,7 @@
                   <label class="heading-aspect">
                     <span>ASPECT</span>
                     <select id="output-aspect" aria-label="Output aspect">
+                      <option value="original">ORIGINAL</option>
                       <option value="2:3">2:3</option>
                       <option value="3:4">3:4</option>
                       <option value="9:16">9:16</option>
@@ -113,21 +114,6 @@
             <p class="control-help">Choose the still frame. 0% and 100% are identical.</p>
           </section>
 
-          <section class="control-group animation-control">
-            <div class="switch-row">
-              <span><strong>ANIMATE</strong><small>Optional infinite zoom preview</small></span>
-              <label class="switch">
-                <input id="animate" type="checkbox" />
-                <span aria-hidden="true"></span>
-              </label>
-            </div>
-            <div class="speed-row" id="speed-row" aria-disabled="true">
-              <label for="speed">SPEED</label>
-              <input id="speed" type="range" min="-5" max="5" step="0.05" value="0.35" />
-              <output id="speed-value" for="speed">0.35×</output>
-            </div>
-          </section>
-
           <section class="export-block">
             <div class="export-heading"><span>EXPORT STILL</span><small id="export-size">1600 × 1000 PX</small></div>
             <button class="button button-primary" id="png-button" type="button">
@@ -159,10 +145,25 @@
                 <option value="10">10</option>
               </select>
             </label>
-            <button class="button button-secondary" id="mp4-button" type="button">
+            <div class="loop-controls">
+              <div class="switch-row">
+                <span><strong>ANIMATE</strong><small>Optional infinite zoom preview</small></span>
+                <label class="switch">
+                  <input id="animate" type="checkbox" />
+                  <span aria-hidden="true"></span>
+                </label>
+              </div>
+              <div class="speed-row" id="speed-row" aria-disabled="true">
+                <label for="speed">SPEED</label>
+                <input id="speed" type="range" min="-5" max="5" step="0.05" value="0.35" />
+                <output id="speed-value" for="speed">0.35×</output>
+              </div>
+              <p class="control-help" id="speed-period">One loop takes 23.8 s at this speed.</p>
+            </div>
+            <button class="button button-primary" id="mp4-button" type="button">
               <span>EXPORT MP4 LOOP</span><b id="mp4-duration">04 SEC</b>
             </button>
-            <p class="export-note" id="export-note" role="status">PNG uses the crop resolution. Each MP4 cycle is a 4-second H.264 loop.</p>
+            <p class="export-note" id="export-note" role="status">PNG uses the crop resolution. Each MP4 cycle is one animation loop at the current speed.</p>
           </section>
         </aside>
       </main>

@@ -1,10 +1,10 @@
 import { clamp, isConvex, type Point } from './math';
 
 const DEFAULT_INNER: Point[] = [
-  { x: 0.365, y: 0.245 },
-  { x: 0.695, y: 0.305 },
-  { x: 0.66, y: 0.755 },
-  { x: 0.335, y: 0.69 },
+  { x: 0.32, y: 0.25 },
+  { x: 0.68, y: 0.25 },
+  { x: 0.68, y: 0.75 },
+  { x: 0.32, y: 0.75 },
 ];
 
 const DEFAULT_OUTER: Point[] = [
@@ -37,6 +37,8 @@ function copyPoints(points: readonly Point[]): Point[] {
   return points.map((point) => ({ ...point }));
 }
 
+const FRAME_MARGIN = 0.012;
+
 function edgeLength(a: Point, b: Point, imageAspect: number): number {
   return Math.hypot((b.x - a.x) * imageAspect, b.y - a.y);
 }
@@ -54,16 +56,14 @@ function fitOuterToInnerAspect(
   currentOuter: readonly Point[],
   imageAspect: number,
 ): Point[] | null {
-  const edge = 0.015;
-  const margin = 0.012;
-  const maximumSpan = 1 - edge * 2;
+  const maximumSpan = 1;
   const normalizedRatio = innerPhysicalAspect(inner, imageAspect) / imageAspect;
   const minimumX = Math.min(...inner.map((point) => point.x));
   const maximumX = Math.max(...inner.map((point) => point.x));
   const minimumY = Math.min(...inner.map((point) => point.y));
   const maximumY = Math.max(...inner.map((point) => point.y));
-  const requiredWidth = maximumX - minimumX + margin * 2;
-  const requiredHeight = maximumY - minimumY + margin * 2;
+  const requiredWidth = maximumX - minimumX + FRAME_MARGIN * 2;
+  const requiredHeight = maximumY - minimumY + FRAME_MARGIN * 2;
   const currentHeight = currentOuter[3].y - currentOuter[0].y;
 
   let height = Math.max(currentHeight, requiredHeight, requiredWidth / normalizedRatio);
@@ -75,14 +75,14 @@ function fitOuterToInnerAspect(
 
   const currentCenterX = (currentOuter[0].x + currentOuter[2].x) * 0.5;
   const currentCenterY = (currentOuter[0].y + currentOuter[2].y) * 0.5;
-  const minimumCenterX = Math.max(edge + width * 0.5, maximumX + margin - width * 0.5);
-  const maximumCenterX = Math.min(1 - edge - width * 0.5, minimumX - margin + width * 0.5);
-  const minimumCenterY = Math.max(edge + height * 0.5, maximumY + margin - height * 0.5);
-  const maximumCenterY = Math.min(1 - edge - height * 0.5, minimumY - margin + height * 0.5);
-  if (minimumCenterX > maximumCenterX || minimumCenterY > maximumCenterY) return null;
+  const minimumCenterX = Math.max(width * 0.5, maximumX + FRAME_MARGIN - width * 0.5);
+  const maximumCenterX = Math.min(1 - width * 0.5, minimumX - FRAME_MARGIN + width * 0.5);
+  const minimumCenterY = Math.max(height * 0.5, maximumY + FRAME_MARGIN - height * 0.5);
+  const maximumCenterY = Math.min(1 - height * 0.5, minimumY - FRAME_MARGIN + height * 0.5);
+  if (minimumCenterX > maximumCenterX + 1e-4 || minimumCenterY > maximumCenterY + 1e-4) return null;
 
-  const centerX = clamp(currentCenterX, minimumCenterX, maximumCenterX);
-  const centerY = clamp(currentCenterY, minimumCenterY, maximumCenterY);
+  const centerX = clamp(currentCenterX, Math.min(minimumCenterX, maximumCenterX), Math.max(minimumCenterX, maximumCenterX));
+  const centerY = clamp(currentCenterY, Math.min(minimumCenterY, maximumCenterY), Math.max(minimumCenterY, maximumCenterY));
   const left = centerX - width * 0.5;
   const right = centerX + width * 0.5;
   const top = centerY - height * 0.5;
@@ -101,7 +101,6 @@ function moveRectangleCorner(
   point: Point,
   normalizedRatio: number,
 ): Point[] {
-  const edge = 0.015;
   const opposite = points[(index + 2) % 4];
   const horizontalSign = index === 0 || index === 3 ? -1 : 1;
   const verticalSign = index === 0 || index === 1 ? -1 : 1;
@@ -112,8 +111,8 @@ function moveRectangleCorner(
     : rawHeight;
   height = Math.max(height, 0.04, 0.04 / normalizedRatio);
   let width = height * normalizedRatio;
-  const maximumWidth = horizontalSign < 0 ? opposite.x - edge : 1 - edge - opposite.x;
-  const maximumHeight = verticalSign < 0 ? opposite.y - edge : 1 - edge - opposite.y;
+  const maximumWidth = horizontalSign < 0 ? opposite.x : 1 - opposite.x;
+  const maximumHeight = verticalSign < 0 ? opposite.y : 1 - opposite.y;
   const fitScale = Math.min(1, maximumWidth / width, maximumHeight / height);
   width *= fitScale;
   height *= fitScale;
@@ -150,7 +149,7 @@ function clampSpan(value: number, minimum: number, maximum: number): number {
 }
 
 function clampInnerShift(inner: readonly Point[], outer: readonly Point[], delta: Point): Point {
-  const margin = 0.012;
+  const margin = FRAME_MARGIN;
   const left = outer[0].x + margin;
   const right = outer[1].x - margin;
   const top = outer[0].y + margin;
@@ -172,8 +171,8 @@ function clampInnerShift(inner: readonly Point[], outer: readonly Point[], delta
 }
 
 function translateOuter(outer: readonly Point[], inner: readonly Point[], delta: Point): Point[] {
-  const edge = 0.015;
-  const margin = 0.012;
+  const edge = 0;
+  const margin = FRAME_MARGIN;
   const width = outer[1].x - outer[0].x;
   const height = outer[3].y - outer[0].y;
   let minimumX = Infinity;
@@ -218,10 +217,9 @@ export class SourceEditor {
   private outerPoints = copyPoints(DEFAULT_OUTER);
   private activeFrame: FrameName = 'inner';
   private activePoint = -1;
-  private dragMode: 'point' | 'frame' | null = null;
-  private dragOrigin: Point | null = null;
-  private dragStartInner: Point[] | null = null;
-  private dragStartOuter: Point[] | null = null;
+  private dragMode: 'point' | 'frame' | 'scroll' | null = null;
+  private lastPointer: Point | null = null;
+  private scrollClient: Point | null = null;
   private pointerId: number | null = null;
   private detailViewBox: ViewBox | null = null;
 
@@ -242,6 +240,11 @@ export class SourceEditor {
     this.resizeObserver = new ResizeObserver(() => this.draw());
     this.resizeObserver.observe(this.canvas);
     this.createDemoImage();
+    this.outerPoints = fitOuterToInnerAspect(
+      this.innerPoints,
+      this.outerPoints,
+      this.width / this.height,
+    ) ?? this.outerPoints;
     this.draw();
   }
 
@@ -275,7 +278,11 @@ export class SourceEditor {
 
   resetSelection(): void {
     this.innerPoints = copyPoints(DEFAULT_INNER);
-    this.outerPoints = copyPoints(DEFAULT_OUTER);
+    this.outerPoints = fitOuterToInnerAspect(
+      this.innerPoints,
+      DEFAULT_OUTER,
+      this.width / this.height,
+    ) ?? copyPoints(DEFAULT_OUTER);
     if (this.detailMode) this.detailViewBox = this.makeDetailViewBox();
     this.activeFrame = 'inner';
     this.activePoint = -1;
@@ -285,8 +292,8 @@ export class SourceEditor {
 
   setSelection(selection: FrameSelection): boolean {
     const inner = copyPoints(selection.inner);
-    const outer = copyPoints(selection.outer);
-    if (!this.validFrames(inner, outer)) return false;
+    const outer = fitOuterToInnerAspect(inner, selection.outer, this.width / this.height);
+    if (!outer || !this.validFrames(inner, outer)) return false;
     this.innerPoints = inner;
     this.outerPoints = outer;
     this.activeFrame = 'inner';
@@ -502,42 +509,35 @@ export class SourceEditor {
     context.closePath();
     context.fill();
 
+    const portalX = DEFAULT_INNER[0].x * width;
+    const portalY = DEFAULT_INNER[0].y * height;
+    const portalWidth = (DEFAULT_INNER[1].x - DEFAULT_INNER[0].x) * width;
+    const portalHeight = (DEFAULT_INNER[3].y - DEFAULT_INNER[0].y) * height;
     context.fillStyle = '#efeadf';
-    context.beginPath();
-    context.moveTo(515, 195);
-    context.lineTo(1155, 260);
-    context.lineTo(1095, 815);
-    context.lineTo(465, 735);
-    context.closePath();
-    context.fill();
+    context.fillRect(portalX, portalY, portalWidth, portalHeight);
     context.strokeStyle = '#272823';
     context.lineWidth = 28;
-    context.stroke();
+    context.strokeRect(portalX, portalY, portalWidth, portalHeight);
 
+    const inset = 68;
     context.fillStyle = '#34352f';
-    context.beginPath();
-    context.moveTo(584, 252);
-    context.lineTo(1085, 302);
-    context.lineTo(1045, 747);
-    context.lineTo(532, 684);
-    context.closePath();
-    context.fill();
+    context.fillRect(portalX + inset, portalY + inset, portalWidth - inset * 2, portalHeight - inset * 2);
 
-    const portalGlow = context.createRadialGradient(810, 500, 15, 810, 500, 320);
+    const portalGlow = context.createRadialGradient(width * 0.5, height * 0.5, 15, width * 0.5, height * 0.5, 320);
     portalGlow.addColorStop(0, '#d49b6d');
     portalGlow.addColorStop(0.35, '#8a745f');
     portalGlow.addColorStop(1, '#2b2d2a');
     context.fillStyle = portalGlow;
-    context.beginPath();
-    context.moveTo(604, 272);
-    context.lineTo(1064, 319);
-    context.lineTo(1025, 724);
-    context.lineTo(553, 666);
-    context.closePath();
-    context.fill();
+    const glowInset = 90;
+    context.fillRect(
+      portalX + glowInset,
+      portalY + glowInset,
+      portalWidth - glowInset * 2,
+      portalHeight - glowInset * 2,
+    );
 
     context.save();
-    context.translate(800, 505);
+    context.translate(width * 0.5, height * 0.5);
     context.strokeStyle = 'rgba(241, 234, 219, 0.56)';
     context.lineWidth = 5;
     for (let index = 0; index < 8; index += 1) {
@@ -635,13 +635,18 @@ export class SourceEditor {
     const handle = this.nearestHandle(event);
     const imagePoint = this.pointerImagePoint(event);
     const frame = handle ? null : this.frameUnderPoint(imagePoint);
-    if (!handle && !frame) return;
+    if (!handle && !frame) {
+      if (event.pointerType !== 'touch') return;
+      this.dragMode = 'scroll';
+      this.scrollClient = { x: event.clientX, y: event.clientY };
+      this.pointerId = event.pointerId;
+      this.canvas.setPointerCapture(event.pointerId);
+      return;
+    }
     this.dragMode = handle ? 'point' : 'frame';
     this.activeFrame = handle?.frame ?? frame ?? 'inner';
     this.activePoint = handle?.index ?? -1;
-    this.dragOrigin = imagePoint;
-    this.dragStartInner = copyPoints(this.innerPoints);
-    this.dragStartOuter = copyPoints(this.outerPoints);
+    this.lastPointer = imagePoint;
     this.pointerId = event.pointerId;
     this.canvas.setPointerCapture(event.pointerId);
     this.canvas.classList.add('dragging');
@@ -656,6 +661,10 @@ export class SourceEditor {
       return;
     }
     if (this.pointerId !== event.pointerId) return;
+    if (this.dragMode === 'scroll') {
+      this.scrollFromClient(event);
+      return;
+    }
     if (this.dragMode === 'frame') {
       this.moveActiveFrame(event);
       return;
@@ -664,7 +673,7 @@ export class SourceEditor {
     const inner = copyPoints(this.innerPoints);
     let outer = copyPoints(this.outerPoints);
     if (this.activeFrame === 'inner') {
-      inner[this.activePoint] = this.eventPoint(event);
+      inner[this.activePoint] = this.eventPoint(event, true);
       const matchedOuter = fitOuterToInnerAspect(inner, outer, this.width / this.height);
       if (!matchedOuter) {
         this.onInvalid();
@@ -675,7 +684,7 @@ export class SourceEditor {
       outer = moveRectangleCorner(
         outer,
         this.activePoint,
-        this.eventPoint(event),
+        this.eventPoint(event, false),
         innerPhysicalAspect(inner, this.width / this.height) / (this.width / this.height),
       );
     }
@@ -691,12 +700,13 @@ export class SourceEditor {
 
   private handlePointerUp = (event: PointerEvent): void => {
     if (this.pointerId !== event.pointerId) return;
-    this.canvas.releasePointerCapture(event.pointerId);
+    if (this.canvas.hasPointerCapture(event.pointerId)) {
+      this.canvas.releasePointerCapture(event.pointerId);
+    }
     this.pointerId = null;
     this.dragMode = null;
-    this.dragOrigin = null;
-    this.dragStartInner = null;
-    this.dragStartOuter = null;
+    this.lastPointer = null;
+    this.scrollClient = null;
     this.canvas.classList.remove('dragging');
     this.updateHoverCursor(event);
   };
@@ -749,28 +759,56 @@ export class SourceEditor {
   }
 
   private moveActiveFrame(event: PointerEvent): void {
-    if (!this.dragOrigin || !this.dragStartInner || !this.dragStartOuter) return;
+    if (!this.lastPointer) return;
     const now = this.pointerImagePoint(event);
-    const delta = { x: now.x - this.dragOrigin.x, y: now.y - this.dragOrigin.y };
-    const inner = copyPoints(this.dragStartInner);
-    let outer = copyPoints(this.dragStartOuter);
+    const step = { x: now.x - this.lastPointer.x, y: now.y - this.lastPointer.y };
+    this.lastPointer = now;
+    const inner = copyPoints(this.innerPoints);
+    let outer = copyPoints(this.outerPoints);
+    let unused = { x: 0, y: 0 };
     if (this.activeFrame === 'inner') {
-      const shift = clampInnerShift(inner, outer, delta);
+      const shift = clampInnerShift(inner, outer, step);
       inner.forEach((point) => {
         point.x += shift.x;
         point.y += shift.y;
       });
+      unused = { x: step.x - shift.x, y: step.y - shift.y };
     } else {
-      outer = translateOuter(outer, inner, delta);
+      const next = translateOuter(outer, inner, step);
+      unused = {
+        x: step.x - (next[0].x - outer[0].x),
+        y: step.y - (next[0].y - outer[0].y),
+      };
+      outer = next;
     }
-    if (!this.validFrames(inner, outer)) {
-      this.onInvalid();
-      return;
+    if (this.validFrames(inner, outer)) {
+      this.innerPoints = inner;
+      this.outerPoints = outer;
+      this.emitChange();
+      this.draw();
     }
-    this.innerPoints = inner;
-    this.outerPoints = outer;
-    this.emitChange();
-    this.draw();
+    if (event.pointerType === 'touch') this.scrollUnused(unused);
+  }
+
+  private scrollFromClient(event: PointerEvent): void {
+    if (!this.scrollClient) return;
+    const deltaY = this.scrollClient.y - event.clientY;
+    this.scrollClient = { x: event.clientX, y: event.clientY };
+    this.scrollPage(deltaY);
+  }
+
+  private scrollUnused(unused: Point): void {
+    if (Math.abs(unused.y) < 1e-6) return;
+    const bounds = this.canvas.getBoundingClientRect();
+    const view = this.currentViewBox();
+    const pixelsY = unused.y / view.height * bounds.height;
+    this.scrollPage(-pixelsY);
+  }
+
+  private scrollPage(deltaY: number): void {
+    if (deltaY === 0) return;
+    const scroller = document.scrollingElement ?? document.documentElement;
+    scroller.scrollBy({ top: deltaY, behavior: 'auto' });
   }
 
   private pointerImagePoint(event: PointerEvent): Point {
@@ -799,9 +837,10 @@ export class SourceEditor {
     const inner = copyPoints(this.innerPoints);
     let outer = copyPoints(this.outerPoints);
     const points = this.activeFrame === 'inner' ? inner : outer;
+    const inset = this.activeFrame === 'inner' ? 0.01 : 0;
     const nextPoint = {
-      x: clamp(points[this.activePoint].x + direction.x * step, 0.015, 0.985),
-      y: clamp(points[this.activePoint].y + direction.y * step, 0.015, 0.985),
+      x: clamp(points[this.activePoint].x + direction.x * step, inset, 1 - inset),
+      y: clamp(points[this.activePoint].y + direction.y * step, inset, 1 - inset),
     };
     if (this.activeFrame === 'inner') {
       inner[this.activePoint] = nextPoint;
@@ -829,12 +868,13 @@ export class SourceEditor {
     this.draw();
   };
 
-  private eventPoint(event: PointerEvent): Point {
+  private eventPoint(event: PointerEvent, inset: boolean): Point {
     const bounds = this.canvas.getBoundingClientRect();
     const view = this.currentViewBox();
+    const limit = inset ? 0.01 : 0;
     return {
-      x: clamp(view.left + (event.clientX - bounds.left) / bounds.width * view.width, 0.015, 0.985),
-      y: clamp(view.top + (event.clientY - bounds.top) / bounds.height * view.height, 0.015, 0.985),
+      x: clamp(view.left + (event.clientX - bounds.left) / bounds.width * view.width, limit, 1 - limit),
+      y: clamp(view.top + (event.clientY - bounds.top) / bounds.height * view.height, limit, 1 - limit),
     };
   }
 }

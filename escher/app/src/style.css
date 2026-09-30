@@ -653,6 +653,10 @@ input[type="range"]::-moz-range-thumb {
   margin-top: 0;
 }
 
+.loop-controls {
+  margin: 16px 0 12px;
+}
+
 .button-primary,
 .button-secondary {
   width: 100%;

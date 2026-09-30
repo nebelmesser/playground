@@ -8,8 +8,6 @@ import {
 } from 'mediabunny';
 
 export const VIDEO_FPS = 60;
-export const VIDEO_DURATION_SECONDS = 4;
-export const VIDEO_FRAME_COUNT = VIDEO_FPS * VIDEO_DURATION_SECONDS;
 
 export const VIDEO_PRESETS = [
   { value: 'source', label: 'SOURCE', longEdge: null },
