@@ -27,6 +27,7 @@ type Pipelines = {
   select: GPUComputePipeline;
   paint: GPUComputePipeline;
   stats: GPUComputePipeline;
+  regions: GPUComputePipeline;
   render: GPURenderPipeline;
 };
 
@@ -37,6 +38,21 @@ type RetiredResources = {
 };
 
 const workgroups = (value: number, size: number): number => Math.ceil(value / size);
+const REGION_LONG_SIDE = 112;
+const REGION_BUFFER_EDGE = 128;
+
+const regionGrid = (width: number, height: number): { width: number; height: number } => {
+  if (width >= height) {
+    return {
+      width: REGION_LONG_SIDE,
+      height: Math.max(1, Math.round((REGION_LONG_SIDE * height) / width)),
+    };
+  }
+  return {
+    width: Math.max(1, Math.round((REGION_LONG_SIDE * width) / height)),
+    height: REGION_LONG_SIDE,
+  };
+};
 
 export class GpuIsing {
   readonly canvas: HTMLCanvasElement;
@@ -65,6 +81,9 @@ export class GpuIsing {
   private blurViews: [GPUTextureView, GPUTextureView] | null = null;
   private statsOutput: GPUBuffer | null = null;
   private statsReadback: GPUBuffer | null = null;
+  private readonly regionUniform: GPUBuffer;
+  private readonly regionStorage: GPUBuffer;
+  private readonly regionReadback: GPUBuffer;
 
   private randomGroups: GPUBindGroup[] = [];
   private clearGroups: GPUBindGroup[] = [];
@@ -78,6 +97,7 @@ export class GpuIsing {
   private blurSecondaryHorizontalGroup: GPUBindGroup | null = null;
   private blurSecondaryVerticalGroup: GPUBindGroup | null = null;
   private renderGroup: GPUBindGroup | null = null;
+  private regionGroup: GPUBindGroup | null = null;
 
   private stepNumber = 0;
   private fieldDirty = true;
@@ -111,6 +131,7 @@ export class GpuIsing {
       select: device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'select_spin' } }),
       paint: device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'paint' } }),
       stats: device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'reduce_stats' } }),
+      regions: device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'sample_regions' } }),
       render: device.createRenderPipeline({
         layout: 'auto',
         vertex: { module, entryPoint: 'fullscreen_vertex' },
@@ -148,6 +169,21 @@ export class GpuIsing {
       label: 'Ising selected paint spin',
       size: 4,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    this.regionUniform = device.createBuffer({
+      label: 'Ising region uniforms',
+      size: 16,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    this.regionStorage = device.createBuffer({
+      label: 'Ising region sample',
+      size: REGION_BUFFER_EDGE * REGION_BUFFER_EDGE * 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    this.regionReadback = device.createBuffer({
+      label: 'Ising region readback',
+      size: REGION_BUFFER_EDGE * REGION_BUFFER_EDGE * 4,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
     this.sampler = device.createSampler({
       label: 'Ising field sampler',
@@ -293,7 +329,7 @@ export class GpuIsing {
     this.fieldDirty = true;
   }
 
-  draw(scale: number, radius: number, microOpacity: number, cursor: CursorState): void {
+  draw(scale: number, radius: number, microOpacity: number, mapStrength: number, cursor: CursorState): void {
     if (!this.renderGroup || !this.blurPrimaryVerticalGroup || !this.blurSecondaryHorizontalGroup || !this.blurSecondaryVerticalGroup) return;
     const secondaryRadius = scale > 1 ? Math.max(1, Math.round(radius * 0.45)) : 0;
     const rebuildObservation = this.fieldDirty
@@ -345,7 +381,7 @@ export class GpuIsing {
       this.lastSecondaryRadius = secondaryRadius;
     }
 
-    this.writeRenderParams(scale, radius, microOpacity, cursor);
+    this.writeRenderParams(scale, radius, microOpacity, mapStrength, cursor);
     const renderPass = encoder.beginRenderPass({
       colorAttachments: [{
         view: this.context.getCurrentTexture().createView(),
@@ -359,6 +395,34 @@ export class GpuIsing {
     renderPass.draw(3);
     renderPass.end();
     this.device.queue.submit([encoder.finish()]);
+  }
+
+  async readRegionSample(): Promise<{ width: number; height: number; signs: Int8Array } | null> {
+    const group = this.regionGroup;
+    if (!group || this.regionReadback.mapState !== 'unmapped') return null;
+    const coarse = regionGrid(this.width, this.height);
+    const words = coarse.width * coarse.height;
+    if (words * 4 > this.regionStorage.size) return null;
+    this.device.queue.writeBuffer(this.regionUniform, 0, new Uint32Array([coarse.width, coarse.height, 0, 0]));
+
+    const encoder = this.device.createCommandEncoder({ label: 'Read Ising regions' });
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(this.pipelines.regions);
+    pass.setBindGroup(0, group);
+    pass.dispatchWorkgroups(workgroups(coarse.width, 8), workgroups(coarse.height, 8));
+    pass.end();
+    encoder.copyBufferToBuffer(this.regionStorage, 0, this.regionReadback, 0, words * 4);
+    this.device.queue.submit([encoder.finish()]);
+
+    await this.regionReadback.mapAsync(GPUMapMode.READ);
+    try {
+      const mapped = new Int32Array(this.regionReadback.getMappedRange(), 0, words);
+      const signs = new Int8Array(words);
+      for (let index = 0; index < words; index += 1) signs[index] = mapped[index] < 0 ? -1 : 1;
+      return { width: coarse.width, height: coarse.height, signs };
+    } finally {
+      this.regionReadback.unmap();
+    }
   }
 
   async readStats(): Promise<IsingStats> {
@@ -536,6 +600,16 @@ export class GpuIsing {
         { binding: 15, resource: this.blurViews[1] },
       ],
     });
+    this.regionGroup = this.device.createBindGroup({
+      label: 'Ising region sample bind group',
+      layout: this.pipelines.regions.getBindGroupLayout(0),
+      entries: [
+        { binding: 10, resource: this.sampler },
+        { binding: 15, resource: this.blurViews[1] },
+        { binding: 16, resource: { buffer: this.regionUniform } },
+        { binding: 17, resource: { buffer: this.regionStorage } },
+      ],
+    });
   }
 
   private writeSimParams(seed: number, step: number, temperature: number, phase: number, oldWidth = 0, oldHeight = 0): void {
@@ -585,7 +659,13 @@ export class GpuIsing {
     this.device.queue.writeBuffer(buffer, 0, new Uint32Array([this.width, this.height, radius, 0]));
   }
 
-  private writeRenderParams(scale: number, radius: number, microOpacity: number, cursor: CursorState): void {
+  private writeRenderParams(
+    scale: number,
+    radius: number,
+    microOpacity: number,
+    mapStrength: number,
+    cursor: CursorState,
+  ): void {
     const values = new Float32Array(16);
     values[0] = this.width;
     values[1] = this.height;
@@ -601,6 +681,7 @@ export class GpuIsing {
     values[11] = cursor.painting ? 1 : 0;
     values[12] = cursor.forceHot ? 1 : 0;
     values[13] = Math.max(0.5, this.density * 0.5);
+    values[14] = mapStrength;
     this.device.queue.writeBuffer(this.renderUniform, 0, values);
   }
 

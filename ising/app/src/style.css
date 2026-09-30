@@ -44,6 +44,35 @@ input { font: inherit; }
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
 }
 
+.place-labels {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.place-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  color: #3d1a10;
+  font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
+  font-weight: 500;
+  font-kerning: none;
+  line-height: 1;
+  white-space: nowrap;
+  -webkit-text-stroke: 0.5px #fff;
+  paint-order: stroke fill;
+}
+
+.place-label[data-kind="sea"],
+.place-label[data-kind="lake"] {
+  color: #152456;
+}
+
 .panel {
   position: fixed;
   top: calc(clamp(14px, 3vw, 34px) + 54px);

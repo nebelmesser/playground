@@ -46,6 +46,7 @@ struct RenderParams {
   painting: f32,
   force_hot_brush: f32,
   cursor_stroke_half_width: f32,
+  map_strength: f32,
 }
 
 struct Selection {
@@ -78,6 +79,14 @@ struct VertexOutput {
 @group(0) @binding(13) var blur_target: texture_storage_2d<rgba16float, write>;
 @group(0) @binding(14) var<uniform> blur: BlurParams;
 @group(0) @binding(15) var observed_field: texture_2d<f32>;
+
+struct RegionParams {
+  coarse: vec2<u32>,
+  _pad: vec2<u32>,
+}
+
+@group(0) @binding(16) var<uniform> region_params: RegionParams;
+@group(0) @binding(17) var<storage, read_write> region_cells: array<i32>;
 
 var<workgroup> group_magnetization: array<i32, 256>;
 var<workgroup> group_energy: array<i32, 256>;
@@ -346,6 +355,32 @@ fn ring_band_mask(value: f32, center: f32, half_width: f32, antialias: f32) -> f
   return 1.0 - smoothstep(half_width, half_width + antialias, abs(value - center));
 }
 
+fn orange_isolines(value: f32) -> f32 {
+  let gradient = max(length(vec2<f32>(dpdx(value), dpdy(value))), 0.000001);
+  let spacing = 0.28;
+  let level = round(value / spacing) * spacing;
+  let distance_in_pixels = abs(value - level) / gradient;
+  let index_line = abs(level - 0.56) < 0.02;
+  let half_width = select(0.48, 0.86, index_line);
+  let mask = 1.0 - smoothstep(half_width - 0.28, half_width + 0.42, distance_in_pixels);
+  let on_land = select(0.0, 1.0, value > 0.05 && level > spacing * 0.5);
+  return mask * on_land * select(0.68, 1.0, index_line);
+}
+
+@compute @workgroup_size(8, 8)
+fn sample_regions(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (gid.x >= region_params.coarse.x || gid.y >= region_params.coarse.y) { return; }
+  let origin = vec2<f32>(gid.xy) / vec2<f32>(region_params.coarse);
+  let cell = vec2<f32>(1.0) / vec2<f32>(region_params.coarse);
+  let value = (
+    textureSampleLevel(observed_field, field_sampler, origin + cell * vec2<f32>(0.25, 0.25), 0.0).r
+    + textureSampleLevel(observed_field, field_sampler, origin + cell * vec2<f32>(0.75, 0.25), 0.0).r
+    + textureSampleLevel(observed_field, field_sampler, origin + cell * vec2<f32>(0.25, 0.75), 0.0).r
+    + textureSampleLevel(observed_field, field_sampler, origin + cell * vec2<f32>(0.75, 0.75), 0.0).r
+  ) * 0.25;
+  region_cells[gid.y * region_params.coarse.x + gid.x] = select(-1, 1, value >= 0.0);
+}
+
 @fragment
 fn field_fragment(input: VertexOutput) -> @location(0) vec4<f32> {
   let uv = input.uv;
@@ -353,6 +388,10 @@ fn field_fragment(input: VertexOutput) -> @location(0) vec4<f32> {
   let cell = min(vec2<u32>(uv * render_params.grid), vec2<u32>(render_params.grid) - vec2<u32>(1u));
   let microscopic = textureLoad(sampled_field, vec2<i32>(cell), 0).r * 2.0 - 1.0;
   var color = mix(palette(value), palette(microscopic), render_params.micro_opacity);
+  if (render_params.map_strength > 0.004) {
+    let relief = orange_isolines(value);
+    color = mix(color, vec3<f32>(0.29, 0.1, 0.045), relief * render_params.map_strength * 0.82);
+  }
 
   var edge = 0.0;
   if (render_params.observation_radius < 0.5) {

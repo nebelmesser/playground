@@ -1,9 +1,11 @@
 import './style.css';
 import { requestGpu } from './gpu/device';
 import { GpuIsing, type CursorState } from './gpu/ising';
+import { labelPositions, PlaceTracker, type LabelMode, type PlaceLabel } from './places';
 
 const CRITICAL_TEMPERATURE = 2 / Math.log(1 + Math.sqrt(2));
 const HALF_STEPS_PER_SECOND = 30;
+const MAP_DIAMETER = 40;
 
 const byId = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
@@ -30,12 +32,13 @@ const phaseValue = byId<HTMLElement>('phase');
 const magnetizationValue = byId<HTMLElement>('magnetization');
 const energyValue = byId<HTMLElement>('energy');
 const fatalError = byId<HTMLElement>('fatal-error');
+const placeLabels = byId<HTMLElement>('place-labels');
 
 const scaleCopy = [
   'Each point is one ±1 spin. The local rule is visible, but there is no independent large object yet.',
   'Nearby spins are averaged on the GPU. Random flips cancel while aligned regions grow stronger.',
-  'The bright zero contour moves like one boundary although the model contains only local cells.',
-  'A large-scale observer cannot see individual flips. Islands merge into a different, slower geometry.',
+  'The bright zero contour is the coastline. Wider views add elevation lines across the orange land.',
+  'A large-scale observer cannot see individual flips. Regions that keep their shape are named like places on a map.',
 ];
 
 type Point = { x: number; y: number };
@@ -74,6 +77,13 @@ async function main(): Promise<void> {
   let pinchStartScale = scale;
   let touchPaintPending = false;
   let touchGestureHadPinch = false;
+  let mapStrength = 0;
+  let placesGeneration = 0;
+  let regionInFlight = false;
+  let lastRegionRequest = 0;
+  const places = new PlaceTracker();
+  const labelNodes = new Map<number, HTMLSpanElement[]>();
+  const CHAOS_TEMPERATURE = CRITICAL_TEMPERATURE + 0.2;
 
   const targetGrid = (): { density: number; width: number; height: number } => {
     const viewportWidth = Math.max(1, window.innerWidth);
@@ -139,8 +149,49 @@ async function main(): Promise<void> {
     const diameter = observationDiameter();
     const radius = (diameter - 1) / 2;
     const microOpacity = diameter === 1 ? 0 : 0.14 * (1 - scale / 3) ** 2;
-    simulation.draw(scale, radius, microOpacity, cursorState());
+    simulation.draw(scale, radius, microOpacity, mapStrength, cursorState());
     renderDirty = false;
+  };
+
+  const invalidatePlaces = (): void => {
+    placesGeneration += 1;
+    places.reset();
+    syncPlaceLabels([]);
+  };
+
+  const syncPlaceLabels = (labels: PlaceLabel[]): void => {
+    const seen = new Set<number>();
+    for (const label of labels) {
+      seen.add(label.id);
+      const spots = labelPositions(label);
+      let nodes = labelNodes.get(label.id);
+      if (!nodes) {
+        nodes = [];
+        labelNodes.set(label.id, nodes);
+      }
+      while (nodes.length < spots.length) {
+        const node = document.createElement('span');
+        node.className = 'place-label';
+        placeLabels.append(node);
+        nodes.push(node);
+      }
+      while (nodes.length > spots.length) nodes.pop()?.remove();
+      for (let index = 0; index < spots.length; index += 1) {
+        const node = nodes[index];
+        const spot = spots[index];
+        if (node.dataset.kind !== label.kind) node.dataset.kind = label.kind;
+        if (node.textContent !== label.text) node.textContent = label.text;
+        node.style.opacity = label.opacity.toFixed(3);
+        node.style.fontSize = `${label.fontSize.toFixed(2)}px`;
+        node.style.letterSpacing = `${label.letterSpacing.toFixed(2)}px`;
+        node.style.transform = `translate(${spot.x.toFixed(2)}px, ${spot.y.toFixed(2)}px) rotate(${label.angle.toFixed(2)}deg) translate(-50%, -50%)`;
+      }
+    }
+    for (const [id, nodes] of labelNodes) {
+      if (seen.has(id)) continue;
+      for (const node of nodes) node.remove();
+      labelNodes.delete(id);
+    }
   };
 
   const resize = (preserve = true): void => {
@@ -150,6 +201,7 @@ async function main(): Promise<void> {
     renderDirty = true;
     drawNow();
     statsGeneration += 1;
+    invalidatePlaces();
   };
 
   const pointerPoint = (event: PointerEvent): Point | null => {
@@ -271,6 +323,7 @@ async function main(): Promise<void> {
     forceHotBrush = false;
     stepAccumulator = 0;
     statsGeneration += 1;
+    invalidatePlaces();
     magnetizationValue.textContent = '0.000';
     energyValue.textContent = '0.000';
     renderDirty = true;
@@ -283,6 +336,7 @@ async function main(): Promise<void> {
     forceHotBrush = true;
     stepAccumulator = 0;
     statsGeneration += 1;
+    invalidatePlaces();
     magnetizationValue.textContent = '1.000';
     energyValue.textContent = '-2.000';
     renderDirty = true;
@@ -418,7 +472,8 @@ async function main(): Promise<void> {
   requestStats();
 
   const animate = (timestamp: number): void => {
-    const deltaSeconds = Math.min(0.1, Math.max(0, (timestamp - previousFrame) / 1000));
+    const rawDelta = Math.max(0, (timestamp - previousFrame) / 1000);
+    const deltaSeconds = Math.min(0.1, rawDelta);
     previousFrame = timestamp;
 
     const scaleDifference = targetScale - scale;
@@ -442,7 +497,43 @@ async function main(): Promise<void> {
       }
     }
 
+    const mapTarget = observationDiameter() >= MAP_DIAMETER ? 1 : 0;
+    const mapDelta = mapTarget - mapStrength;
+    if (Math.abs(mapDelta) > 0.001) {
+      mapStrength += mapDelta * (1 - Math.exp(-deltaSeconds * 7));
+      renderDirty = true;
+    } else if (mapStrength !== mapTarget) {
+      mapStrength = mapTarget;
+      renderDirty = true;
+    }
+
+    const labelMode: LabelMode = temperature > CHAOS_TEMPERATURE
+      ? 'chaos'
+      : observationDiameter() >= MAP_DIAMETER
+        ? 'map'
+        : 'hidden';
+    const viewport = canvas.getBoundingClientRect();
+    const labels = places.advance(Math.min(0.5, rawDelta), labelMode, {
+      width: viewport.width,
+      height: viewport.height,
+    });
+    syncPlaceLabels(labels);
+
     if (renderDirty) drawNow();
+    if (!regionInFlight && labelMode === 'map' && timestamp - lastRegionRequest > 280) {
+      lastRegionRequest = timestamp;
+      regionInFlight = true;
+      const generation = placesGeneration;
+      void simulation.readRegionSample().then((sample) => {
+        if (generation !== placesGeneration || !sample) return;
+        if (temperature > CHAOS_TEMPERATURE || observationDiameter() < MAP_DIAMETER) return;
+        places.ingest(sample);
+      }).catch((error: unknown) => {
+        console.warn('Could not read Ising regions.', error);
+      }).finally(() => {
+        regionInFlight = false;
+      });
+    }
     if (timestamp - previousStats > 750) {
       previousStats = timestamp;
       requestStats();
