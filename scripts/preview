@@ -93,7 +93,7 @@ cmd_up() {
       bundle install
     fi
     echo "starting jekyll :${PREVIEW_PORT}"
-    daemonize "${JEKYLL_LOG}" bundle exec jekyll serve --host 127.0.0.1 --port "${PREVIEW_PORT}" --baseurl=""
+    daemonize "${JEKYLL_LOG}" bundle exec jekyll serve --config _config.yml,_config.preview.yml --host 127.0.0.1 --port "${PREVIEW_PORT}" --baseurl=""
     wait_port "${PREVIEW_PORT}" "jekyll"
   fi
 }

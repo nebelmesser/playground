@@ -390,7 +390,7 @@ fn field_fragment(input: VertexOutput) -> @location(0) vec4<f32> {
   var color = mix(palette(value), palette(microscopic), render_params.micro_opacity);
   if (render_params.map_strength > 0.004) {
     let relief = orange_isolines(value);
-    color = mix(color, vec3<f32>(0.29, 0.1, 0.045), relief * render_params.map_strength * 0.42);
+    color = mix(color, vec3<f32>(0.29, 0.1, 0.045), relief * render_params.map_strength * 0.22);
   }
 
   var edge = 0.0;

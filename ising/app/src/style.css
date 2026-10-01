@@ -64,13 +64,28 @@ input { font: inherit; }
   font-kerning: none;
   line-height: 1;
   white-space: nowrap;
+  transform-origin: 0 0;
   -webkit-text-stroke: 0.5px #fff;
   paint-order: stroke fill;
 }
 
 .place-label[data-kind="sea"],
 .place-label[data-kind="lake"] {
+  font-style: italic;
+}
+
+.place-label[data-kind="sea"] {
   color: #152456;
+}
+
+.place-label[data-kind="lake"] {
+  color: #b9e7ff;
+  -webkit-text-stroke: 0.35px #183b57;
+}
+
+.place-labels.is-single-spin .place-label[data-kind="lake"] {
+  color: rgba(9, 23, 42, 0.76);
+  -webkit-text-stroke: 0;
 }
 
 .panel {
@@ -105,11 +120,11 @@ input { font: inherit; }
   z-index: 3;
   display: grid;
   place-content: center;
-  width: 46px;
-  height: 46px;
+  width: 38px;
+  height: 38px;
   padding: 0;
   border: 1px solid var(--hairline);
-  border-radius: 14px;
+  border-radius: 12px;
   color: var(--ink);
   background: var(--panel);
   box-shadow: 0 14px 38px rgba(0, 0, 0, 0.28);
@@ -122,8 +137,8 @@ input { font: inherit; }
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 22px;
-  height: 22px;
+  width: 19px;
+  height: 19px;
   transition: opacity 160ms ease, transform 160ms ease;
 }
 
@@ -189,6 +204,14 @@ input[type="range"]::-webkit-slider-runnable-track {
   background: linear-gradient(90deg, #ece8de, rgba(236, 232, 222, 0.22));
 }
 
+#scale-dock::-webkit-slider-runnable-track {
+  background: rgba(243, 240, 232, 0.82);
+}
+
+#scale-dock::-moz-range-track {
+  background: rgba(243, 240, 232, 0.82);
+}
+
 input[type="range"]::-webkit-slider-thumb {
   width: 16px;
   height: 16px;
@@ -242,8 +265,8 @@ input[type="range"]::-moz-range-thumb {
 .actions button {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 1px solid var(--hairline);
   border-radius: 999px;
@@ -253,8 +276,8 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .actions button svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .actions .play-icon,
@@ -291,31 +314,63 @@ input[type="range"]::-moz-range-thumb {
   font-variant-numeric: tabular-nums;
 }
 
-.temperature-paddles {
+.temperature-paddles,
+.scale-dock {
   position: fixed;
-  bottom: max(17px, env(safe-area-inset-bottom));
   left: 50%;
   z-index: 2;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(112px, 138px));
-  gap: 3px;
   transform: translateX(-50%);
 }
 
-.temperature-paddle {
+.temperature-paddles {
+  bottom: max(7px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: repeat(2, 68px);
+  gap: 2px;
+}
+
+.scale-dock {
+  top: max(10px, env(safe-area-inset-top));
+  display: grid;
+  grid-template-columns: 68px minmax(86px, 96px) 68px;
+  grid-template-rows: auto auto;
+  column-gap: 5px;
+  align-items: center;
+  width: min(242px, calc(100vw - 70px));
+}
+
+.scale-readout {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0 0 3px;
+  color: #f3f0e8;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+#scale-dock {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.temperature-paddle,
+.scale-paddle {
   --paddle-fill: rgba(70, 76, 88, 0.94);
   --paddle-progress-color: rgba(255, 255, 255, 0.22);
   position: relative;
+  display: grid;
+  place-items: center;
   isolation: isolate;
-  overflow: hidden;
-  min-height: 48px;
-  padding: 0 24px;
+  min-height: 30px;
+  padding: 0;
   border: 0;
-  background: rgba(243, 240, 232, 0.88);
+  background: transparent;
   color: #fff;
-  font-size: 12px;
+  font-size: 9px;
   font-weight: 750;
-  letter-spacing: 0.13em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   cursor: pointer;
@@ -325,33 +380,63 @@ input[type="range"]::-moz-range-thumb {
   transition: filter 120ms ease, transform 120ms ease;
 }
 
-.temperature-paddle::before {
+.paddle-frame {
   position: absolute;
   z-index: -2;
-  inset: 2px;
-  background: var(--paddle-fill);
-  clip-path: inherit;
-  content: "";
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
-.temperature-progress {
+.paddle-frame path {
+  fill: var(--paddle-fill);
+  stroke: rgba(243, 240, 232, 0.9);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.paddle-progress {
   position: absolute;
   z-index: -1;
   inset: 2px;
   background: var(--paddle-progress-color);
-  clip-path: inherit;
   opacity: 0;
-  transform: scaleX(var(--temperature-progress, 0));
+  transform: scaleX(var(--paddle-progress, 0));
   transition: opacity 100ms ease;
   pointer-events: none;
 }
 
-.temperature-paddle-label {
-  position: relative;
+.paddle-label {
+  position: absolute;
   z-index: 1;
+  top: 50%;
+  left: var(--paddle-label-x);
+  max-width: calc(84% - 10px);
+  overflow: hidden;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
 }
 
-.temperature-paddle:focus-visible {
+.rough-paddle .paddle-label,
+.freeze-paddle .paddle-label { --paddle-label-x: 57%; }
+
+.smooth-paddle .paddle-label,
+.heat-paddle .paddle-label { --paddle-label-x: 43%; }
+
+.rough-paddle .paddle-progress,
+.freeze-paddle .paddle-progress {
+  clip-path: polygon(15% 0, 100% 0, 100% 100%, 15% 100%, 0 50%);
+}
+
+.smooth-paddle .paddle-progress,
+.heat-paddle .paddle-progress {
+  clip-path: polygon(0 0, 85% 0, 100% 50%, 85% 100%, 0 100%);
+}
+
+.temperature-paddle:focus-visible,
+.scale-paddle:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 3px;
 }
@@ -359,30 +444,47 @@ input[type="range"]::-moz-range-thumb {
 .freeze-paddle {
   --paddle-fill: rgba(25, 94, 184, 0.95);
   --paddle-progress-color: rgba(83, 176, 255, 0.72);
-  padding-left: 28px;
-  clip-path: polygon(15px 0, 100% 0, calc(100% - 10px) 50%, 100% 100%, 15px 100%, 0 50%);
 }
 
-.freeze-paddle .temperature-progress { transform-origin: right center; }
+.freeze-paddle .paddle-progress { transform-origin: right center; }
 
 .heat-paddle {
   --paddle-fill: rgba(181, 49, 31, 0.95);
   --paddle-progress-color: rgba(255, 119, 73, 0.75);
-  padding-right: 28px;
-  clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 50%, calc(100% - 15px) 100%, 0 100%, 10px 50%);
 }
 
-.heat-paddle .temperature-progress { transform-origin: left center; }
+.heat-paddle .paddle-progress { transform-origin: left center; }
 
-.temperature-paddle[aria-pressed="true"] {
+.rough-paddle,
+.smooth-paddle {
+  --paddle-fill: rgba(92, 96, 104, 0.96);
+  grid-row: 2;
+  min-height: 30px;
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.rough-paddle {
+  grid-column: 1;
+}
+
+.smooth-paddle {
+  grid-column: 3;
+}
+
+.temperature-paddle[aria-pressed="true"],
+.scale-paddle[aria-pressed="true"] {
   filter: brightness(1.22) saturate(1.12);
   transform: scale(0.975);
 }
 
-.temperature-paddle[aria-pressed="true"] .temperature-progress { opacity: 1; }
+.temperature-paddle[aria-pressed="true"] .paddle-progress,
+.scale-paddle[aria-pressed="true"] .paddle-progress { opacity: 1; }
 
 @media (hover: hover) {
-  .temperature-paddle:hover { filter: brightness(1.1); }
+  .temperature-paddle:hover,
+  .scale-paddle:hover { filter: brightness(1.1); }
 }
 
 .hint,
@@ -439,21 +541,29 @@ input[type="range"]::-moz-range-thumb {
   .control + .control { margin-top: 14px; }
   .explanation { margin-top: 14px; }
   .hint { display: none; }
-  .legend { right: 16px; bottom: max(78px, calc(env(safe-area-inset-bottom) + 62px)); }
+  .legend { right: 16px; bottom: max(55px, calc(env(safe-area-inset-bottom) + 44px)); }
   .temperature-paddles {
-    bottom: max(8px, env(safe-area-inset-bottom));
-    grid-template-columns: repeat(2, minmax(104px, 126px));
+    bottom: max(5px, env(safe-area-inset-bottom));
+    grid-template-columns: repeat(2, 60px);
   }
-  .temperature-paddle {
-    min-height: 44px;
-    padding-right: 21px;
-    padding-left: 21px;
-    font-size: 11px;
+  .scale-dock {
+    top: max(5px, env(safe-area-inset-top));
+    grid-template-columns: 64px minmax(80px, 86px) 64px;
+    width: min(222px, calc(100vw - 72px));
+    column-gap: 4px;
   }
+  .temperature-paddle,
+  .scale-paddle {
+    min-height: 28px;
+    font-size: 8px;
+  }
+  .rough-paddle,
+  .smooth-paddle { font-size: 8px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .panel,
   .settings-toggle svg,
-  .temperature-paddle { transition: none; }
+  .temperature-paddle,
+  .scale-paddle { transition: none; }
 }

@@ -1,0 +1,2 @@
+# The local preview does not need live GitHub API metadata.
+github: false

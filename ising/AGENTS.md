@@ -9,3 +9,9 @@ state is raw independent random spins; opening warm-up is a separate action.
 
 Build from `ising/app` with `npm run build`. Preview only through the parent
 repository's `./scripts/preview` command.
+
+## Общие принципы > эвристик
+
+Если пользователь предлагает набор противоречащих требований, то не превращай их в кучу эвристик, попробуй найти общий принцип и воплотить его в коде.
+
+## Правила

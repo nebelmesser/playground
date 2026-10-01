@@ -70,6 +70,7 @@ export class GpuIsing {
   private readonly statsUniform: GPUBuffer;
   private readonly renderUniform: GPUBuffer;
   private readonly blurUniforms: [GPUBuffer, GPUBuffer];
+  private readonly labelBlurUniforms: [GPUBuffer, GPUBuffer];
   private readonly selectionBuffer: GPUBuffer;
   private readonly sampler: GPUSampler;
 
@@ -79,6 +80,8 @@ export class GpuIsing {
   private fieldViews: GPUTextureView[] = [];
   private blurTextures: [GPUTexture, GPUTexture] | null = null;
   private blurViews: [GPUTextureView, GPUTextureView] | null = null;
+  private labelBlurTextures: [GPUTexture, GPUTexture] | null = null;
+  private labelBlurViews: [GPUTextureView, GPUTextureView] | null = null;
   private statsOutput: GPUBuffer | null = null;
   private statsReadback: GPUBuffer | null = null;
   private readonly regionUniform: GPUBuffer;
@@ -96,8 +99,13 @@ export class GpuIsing {
   private blurPrimaryVerticalGroup: GPUBindGroup | null = null;
   private blurSecondaryHorizontalGroup: GPUBindGroup | null = null;
   private blurSecondaryVerticalGroup: GPUBindGroup | null = null;
+  private labelBlurPrimaryHorizontalGroups: GPUBindGroup[] = [];
+  private labelBlurPrimaryVerticalGroup: GPUBindGroup | null = null;
+  private labelBlurSecondaryHorizontalGroup: GPUBindGroup | null = null;
+  private labelBlurSecondaryVerticalGroup: GPUBindGroup | null = null;
   private renderGroup: GPUBindGroup | null = null;
   private regionGroup: GPUBindGroup | null = null;
+  private labelRegionGroup: GPUBindGroup | null = null;
 
   private stepNumber = 0;
   private fieldDirty = true;
@@ -165,6 +173,11 @@ export class GpuIsing {
       size: 16,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     })) as [GPUBuffer, GPUBuffer];
+    this.labelBlurUniforms = [0, 1].map((index) => device.createBuffer({
+      label: `Ising label blur uniforms ${index}`,
+      size: 16,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    })) as [GPUBuffer, GPUBuffer];
     this.selectionBuffer = device.createBuffer({
       label: 'Ising selected paint spin',
       size: 4,
@@ -206,6 +219,7 @@ export class GpuIsing {
     const oldBuffers = this.spinBuffers;
     const oldTexture = this.fieldTexture;
     const oldBlurTextures = this.blurTextures;
+    const oldLabelBlurTextures = this.labelBlurTextures;
     const oldStatsOutput = this.statsOutput;
     const oldStatsReadback = this.statsReadback;
     const oldCurrent = oldBuffers?.[this.currentIndex] ?? null;
@@ -244,7 +258,7 @@ export class GpuIsing {
       this.retire({
         buffers: [oldBuffers[0], oldBuffers[1], ...(oldStatsOutput ? [oldStatsOutput] : [])],
         readback: oldStatsReadback ?? undefined,
-        textures: [oldTexture, ...(oldBlurTextures ?? [])].filter((texture): texture is GPUTexture => Boolean(texture)),
+        textures: [oldTexture, ...(oldBlurTextures ?? []), ...(oldLabelBlurTextures ?? [])].filter((texture): texture is GPUTexture => Boolean(texture)),
       });
     }
     this.fieldDirty = true;
@@ -330,8 +344,8 @@ export class GpuIsing {
   }
 
   draw(scale: number, radius: number, microOpacity: number, mapStrength: number, cursor: CursorState): void {
-    if (!this.renderGroup || !this.blurPrimaryVerticalGroup || !this.blurSecondaryHorizontalGroup || !this.blurSecondaryVerticalGroup) return;
-    const secondaryRadius = scale > 1 ? Math.max(1, Math.round(radius * 0.45)) : 0;
+    if (!this.renderGroup || !this.observationReady()) return;
+    const secondaryRadius = this.secondaryObservationRadius(radius, scale);
     const rebuildObservation = this.fieldDirty
       || radius !== this.lastBlurRadius
       || secondaryRadius !== this.lastSecondaryRadius;
@@ -347,39 +361,7 @@ export class GpuIsing {
       this.fieldDirty = false;
     }
 
-    if (rebuildObservation) {
-      this.writeBlurParams(this.blurUniforms[0], radius);
-      this.writeBlurParams(this.blurUniforms[1], secondaryRadius);
-
-      const horizontalPass = encoder.beginComputePass({ label: 'Horizontal Ising observation blur' });
-      horizontalPass.setPipeline(this.pipelines.blurSpinsHorizontal);
-      horizontalPass.setBindGroup(0, this.blurPrimaryHorizontalGroups[this.currentIndex]);
-      horizontalPass.dispatchWorkgroups(workgroups(this.height, 64));
-      horizontalPass.end();
-
-      const verticalPass = encoder.beginComputePass({ label: 'Vertical Ising observation blur' });
-      verticalPass.setPipeline(this.pipelines.blurTextureVertical);
-      verticalPass.setBindGroup(0, this.blurPrimaryVerticalGroup);
-      verticalPass.dispatchWorkgroups(workgroups(this.width, 64));
-      verticalPass.end();
-
-      if (secondaryRadius > 0) {
-        const secondaryHorizontalPass = encoder.beginComputePass({ label: 'Secondary horizontal Ising blur' });
-        secondaryHorizontalPass.setPipeline(this.pipelines.blurTextureHorizontal);
-        secondaryHorizontalPass.setBindGroup(0, this.blurSecondaryHorizontalGroup);
-        secondaryHorizontalPass.dispatchWorkgroups(workgroups(this.height, 64));
-        secondaryHorizontalPass.end();
-
-        const secondaryVerticalPass = encoder.beginComputePass({ label: 'Secondary vertical Ising blur' });
-        secondaryVerticalPass.setPipeline(this.pipelines.blurTextureVertical);
-        secondaryVerticalPass.setBindGroup(0, this.blurSecondaryVerticalGroup);
-        secondaryVerticalPass.dispatchWorkgroups(workgroups(this.width, 64));
-        secondaryVerticalPass.end();
-      }
-
-      this.lastBlurRadius = radius;
-      this.lastSecondaryRadius = secondaryRadius;
-    }
+    if (rebuildObservation) this.appendObservationBlur(encoder, radius, secondaryRadius, 'display');
 
     this.writeRenderParams(scale, radius, microOpacity, mapStrength, cursor);
     const renderPass = encoder.beginRenderPass({
@@ -397,18 +379,23 @@ export class GpuIsing {
     this.device.queue.submit([encoder.finish()]);
   }
 
-  async readRegionSample(): Promise<{ width: number; height: number; signs: Int8Array } | null> {
+  async readRegionSample(radius: number, scale: number): Promise<{ width: number; height: number; signs: Int8Array } | null> {
     const group = this.regionGroup;
-    if (!group || this.regionReadback.mapState !== 'unmapped') return null;
+    if (!group || !this.observationReady() || this.regionReadback.mapState !== 'unmapped') return null;
     const coarse = regionGrid(this.width, this.height);
     const words = coarse.width * coarse.height;
     if (words * 4 > this.regionStorage.size) return null;
-    this.device.queue.writeBuffer(this.regionUniform, 0, new Uint32Array([coarse.width, coarse.height, 0, 0]));
+    const secondaryRadius = this.secondaryObservationRadius(radius, scale);
+    const useDisplay = radius === this.lastBlurRadius && secondaryRadius === this.lastSecondaryRadius;
+    const sampleGroup = useDisplay ? group : this.labelRegionGroup;
+    if (!sampleGroup) return null;
 
     const encoder = this.device.createCommandEncoder({ label: 'Read Ising regions' });
+    if (!useDisplay) this.appendObservationBlur(encoder, radius, secondaryRadius, 'label');
+    this.device.queue.writeBuffer(this.regionUniform, 0, new Uint32Array([coarse.width, coarse.height, 0, 0]));
     const pass = encoder.beginComputePass();
     pass.setPipeline(this.pipelines.regions);
-    pass.setBindGroup(0, group);
+    pass.setBindGroup(0, sampleGroup);
     pass.dispatchWorkgroups(workgroups(coarse.width, 8), workgroups(coarse.height, 8));
     pass.end();
     encoder.copyBufferToBuffer(this.regionStorage, 0, this.regionReadback, 0, words * 4);
@@ -486,6 +473,13 @@ export class GpuIsing {
       usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
     })) as [GPUTexture, GPUTexture];
     this.blurViews = this.blurTextures.map((texture) => texture.createView()) as [GPUTextureView, GPUTextureView];
+    this.labelBlurTextures = [0, 1].map((index) => this.device.createTexture({
+      label: `Ising label observation blur ${index}`,
+      size: { width: this.width, height: this.height },
+      format: 'rgba16float',
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+    })) as [GPUTexture, GPUTexture];
+    this.labelBlurViews = this.labelBlurTextures.map((texture) => texture.createView()) as [GPUTextureView, GPUTextureView];
 
     this.statsOutput = this.device.createBuffer({
       label: 'Ising statistics accumulator',
@@ -610,6 +604,49 @@ export class GpuIsing {
         { binding: 17, resource: { buffer: this.regionStorage } },
       ],
     });
+    if (!this.labelBlurViews) return;
+    this.labelBlurPrimaryHorizontalGroups = this.spinBuffers.map((buffer) => this.device.createBindGroup({
+      layout: this.pipelines.blurSpinsHorizontal.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer } },
+        { binding: 13, resource: this.labelBlurViews![0] },
+        { binding: 14, resource: { buffer: this.labelBlurUniforms[0] } },
+      ],
+    }));
+    this.labelBlurPrimaryVerticalGroup = this.device.createBindGroup({
+      layout: this.pipelines.blurTextureVertical.getBindGroupLayout(0),
+      entries: [
+        { binding: 12, resource: this.labelBlurViews[0] },
+        { binding: 13, resource: this.labelBlurViews[1] },
+        { binding: 14, resource: { buffer: this.labelBlurUniforms[0] } },
+      ],
+    });
+    this.labelBlurSecondaryHorizontalGroup = this.device.createBindGroup({
+      layout: this.pipelines.blurTextureHorizontal.getBindGroupLayout(0),
+      entries: [
+        { binding: 12, resource: this.labelBlurViews[1] },
+        { binding: 13, resource: this.labelBlurViews[0] },
+        { binding: 14, resource: { buffer: this.labelBlurUniforms[1] } },
+      ],
+    });
+    this.labelBlurSecondaryVerticalGroup = this.device.createBindGroup({
+      layout: this.pipelines.blurTextureVertical.getBindGroupLayout(0),
+      entries: [
+        { binding: 12, resource: this.labelBlurViews[0] },
+        { binding: 13, resource: this.labelBlurViews[1] },
+        { binding: 14, resource: { buffer: this.labelBlurUniforms[1] } },
+      ],
+    });
+    this.labelRegionGroup = this.device.createBindGroup({
+      label: 'Ising label-scale region sample bind group',
+      layout: this.pipelines.regions.getBindGroupLayout(0),
+      entries: [
+        { binding: 10, resource: this.sampler },
+        { binding: 15, resource: this.labelBlurViews[1] },
+        { binding: 16, resource: { buffer: this.regionUniform } },
+        { binding: 17, resource: { buffer: this.regionStorage } },
+      ],
+    });
   }
 
   private writeSimParams(seed: number, step: number, temperature: number, phase: number, oldWidth = 0, oldHeight = 0): void {
@@ -653,6 +690,67 @@ export class GpuIsing {
     view.setFloat32(44, endY, true);
     view.setFloat32(48, radius, true);
     this.device.queue.writeBuffer(this.brushUniform, 0, bytes);
+  }
+
+  private observationReady(): boolean {
+    return Boolean(
+      this.blurPrimaryVerticalGroup
+      && this.blurSecondaryHorizontalGroup
+      && this.blurSecondaryVerticalGroup,
+    );
+  }
+
+  private secondaryObservationRadius(radius: number, scale: number): number {
+    return scale > 1 ? Math.max(1, Math.round(radius * 0.45)) : 0;
+  }
+
+  private appendObservationBlur(
+    encoder: GPUCommandEncoder,
+    radius: number,
+    secondaryRadius: number,
+    target: 'display' | 'label',
+  ): void {
+    const display = target === 'display';
+    const uniforms = display ? this.blurUniforms : this.labelBlurUniforms;
+    const horizontalGroups = display ? this.blurPrimaryHorizontalGroups : this.labelBlurPrimaryHorizontalGroups;
+    const verticalGroup = display ? this.blurPrimaryVerticalGroup : this.labelBlurPrimaryVerticalGroup;
+    const secondaryHorizontalGroup = display ? this.blurSecondaryHorizontalGroup : this.labelBlurSecondaryHorizontalGroup;
+    const secondaryVerticalGroup = display ? this.blurSecondaryVerticalGroup : this.labelBlurSecondaryVerticalGroup;
+    if (!verticalGroup || !secondaryHorizontalGroup || !secondaryVerticalGroup || horizontalGroups.length === 0) return;
+
+    this.writeBlurParams(uniforms[0], radius);
+    this.writeBlurParams(uniforms[1], secondaryRadius);
+
+    const horizontalPass = encoder.beginComputePass({ label: 'Horizontal Ising observation blur' });
+    horizontalPass.setPipeline(this.pipelines.blurSpinsHorizontal);
+    horizontalPass.setBindGroup(0, horizontalGroups[this.currentIndex]);
+    horizontalPass.dispatchWorkgroups(workgroups(this.height, 64));
+    horizontalPass.end();
+
+    const verticalPass = encoder.beginComputePass({ label: 'Vertical Ising observation blur' });
+    verticalPass.setPipeline(this.pipelines.blurTextureVertical);
+    verticalPass.setBindGroup(0, verticalGroup);
+    verticalPass.dispatchWorkgroups(workgroups(this.width, 64));
+    verticalPass.end();
+
+    if (secondaryRadius > 0) {
+      const secondaryHorizontalPass = encoder.beginComputePass({ label: 'Secondary horizontal Ising blur' });
+      secondaryHorizontalPass.setPipeline(this.pipelines.blurTextureHorizontal);
+      secondaryHorizontalPass.setBindGroup(0, secondaryHorizontalGroup);
+      secondaryHorizontalPass.dispatchWorkgroups(workgroups(this.height, 64));
+      secondaryHorizontalPass.end();
+
+      const secondaryVerticalPass = encoder.beginComputePass({ label: 'Secondary vertical Ising blur' });
+      secondaryVerticalPass.setPipeline(this.pipelines.blurTextureVertical);
+      secondaryVerticalPass.setBindGroup(0, secondaryVerticalGroup);
+      secondaryVerticalPass.dispatchWorkgroups(workgroups(this.width, 64));
+      secondaryVerticalPass.end();
+    }
+
+    if (display) {
+      this.lastBlurRadius = radius;
+      this.lastSecondaryRadius = secondaryRadius;
+    }
   }
 
   private writeBlurParams(buffer: GPUBuffer, radius: number): void {

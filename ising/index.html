@@ -7,8 +7,8 @@
   <meta name="description" content="A live WebGPU Ising model showing emergence across observation scales.">
   <link rel="canonical" href="https://nebelmesser.com/ising/">
   <title>Ising Field — Emergence Across Scales</title>
-  <script type="module" src="./assets/ising-ujUz7wed.js"></script>
-  <link rel="stylesheet" href="./assets/ising-BxISXnye.css">
+  <script type="module" src="./assets/ising-BRs6FYGr.js"></script>
+  <link rel="stylesheet" href="./assets/ising-7vKTTZlj.css">
 </head>
 <body>
   <main>
@@ -94,14 +94,29 @@
       </dl>
     </section>
 
+    <div class="scale-dock" role="group" aria-label="Observation scale">
+      <output class="scale-readout" id="scale-readout" for="scale-dock">1 spin</output>
+      <button class="scale-paddle rough-paddle" id="rough" type="button" aria-pressed="false">
+        <svg class="paddle-frame" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M16 2 H98 V38 H16 L6 27 Q1 23 1 20 Q1 17 6 13 Z" /></svg>
+        <span class="paddle-label">Rough</span>
+      </button>
+      <input id="scale-dock" type="range" min="0" max="3" value="1.6" step="0.01" aria-label="Observation scale">
+      <button class="scale-paddle smooth-paddle" id="smooth" type="button" aria-pressed="false">
+        <svg class="paddle-frame" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M2 2 H84 L94 13 Q99 17 99 20 Q99 23 94 27 L84 38 H2 Z" /></svg>
+        <span class="paddle-label">Smooth</span>
+      </button>
+    </div>
+
     <div class="temperature-paddles" role="group" aria-label="Temporary temperature controls">
       <button class="temperature-paddle freeze-paddle" id="freeze" type="button" aria-pressed="false">
-        <span class="temperature-progress" aria-hidden="true"></span>
-        <span class="temperature-paddle-label">Freeze</span>
+        <svg class="paddle-frame" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M16 2 H98 V38 H16 L6 27 Q1 23 1 20 Q1 17 6 13 Z" /></svg>
+        <span class="paddle-progress" aria-hidden="true"></span>
+        <span class="paddle-label">Freeze</span>
       </button>
       <button class="temperature-paddle heat-paddle" id="heat" type="button" aria-pressed="false">
-        <span class="temperature-progress" aria-hidden="true"></span>
-        <span class="temperature-paddle-label">Heat</span>
+        <svg class="paddle-frame" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M2 2 H84 L94 13 Q99 17 99 20 Q99 23 94 27 L84 38 H2 Z" /></svg>
+        <span class="paddle-progress" aria-hidden="true"></span>
+        <span class="paddle-label">Heat</span>
       </button>
     </div>
 

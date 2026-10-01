@@ -1,7 +1,7 @@
 import './style.css';
 import { requestGpu } from './gpu/device';
 import { GpuIsing, type CursorState } from './gpu/ising';
-import { labelPositions, PlaceTracker, type LabelMode, type PlaceLabel } from './places';
+import { labelPositions, PlaceTracker, type LabelMode, type PlaceLabel } from './place-engine';
 
 const CRITICAL_TEMPERATURE = 2 / Math.log(1 + Math.sqrt(2));
 const HALF_STEPS_PER_SECOND = 30;
@@ -28,6 +28,10 @@ const settingsPanel = byId<HTMLElement>('settings-panel');
 const pauseButton = byId<HTMLButtonElement>('pause');
 const restartButton = byId<HTMLButtonElement>('restart');
 const clearBlueButton = byId<HTMLButtonElement>('clear-blue');
+const roughButton = byId<HTMLButtonElement>('rough');
+const smoothButton = byId<HTMLButtonElement>('smooth');
+const scaleDock = byId<HTMLInputElement>('scale-dock');
+const scaleReadout = byId<HTMLOutputElement>('scale-readout');
 const freezeButton = byId<HTMLButtonElement>('freeze');
 const heatButton = byId<HTMLButtonElement>('heat');
 const phaseValue = byId<HTMLElement>('phase');
@@ -86,13 +90,19 @@ async function main(): Promise<void> {
   let lastRegionRequest = 0;
   const places = new PlaceTracker();
   const labelNodes = new Map<number, HTMLSpanElement[]>();
+  const roughHolds = new Set<string>();
+  const smoothHolds = new Set<string>();
   const freezeHolds = new Set<string>();
   const heatHolds = new Set<string>();
   const CHAOS_TEMPERATURE = CRITICAL_TEMPERATURE + 0.2;
+  const MIN_SCALE = Number(scaleInput.min);
+  const MAX_SCALE = Number(scaleInput.max);
   const MIN_TEMPERATURE = Number(temperatureInput.min);
   const MAX_TEMPERATURE = Number(temperatureInput.max);
   const HOLD_RESPONSE_SECONDS = 1.35;
   const RETURN_RESPONSE_SECONDS = 0.75;
+  const SCALE_HOLD_PER_SECOND = (MAX_SCALE - MIN_SCALE) / 2.2;
+  const MIN_LABEL_RADIUS = Math.ceil((MAP_DIAMETER - 1) / 2);
 
   const targetGrid = (): { density: number; width: number; height: number } => {
     const viewportWidth = Math.max(1, window.innerWidth);
@@ -111,16 +121,35 @@ async function main(): Promise<void> {
     return { density: width / viewportWidth, width, height };
   };
 
-  const observationDiameter = (): number => {
-    const radius = Math.max(0, Math.round((2 ** scale - 1) * (Math.min(simulation.width, simulation.height) / 65.64)));
-    return radius * 2 + 1;
+  const observationRadiusAt = (value: number): number => {
+    const factor = Math.min(simulation.width, simulation.height) / 65.64;
+    return Math.max(0, Math.round((2 ** value - 1) * factor));
+  };
+
+  const observationDiameter = (): number => observationRadiusAt(scale) * 2 + 1;
+
+  // Smallest slider position whose observation can still carry place names.
+  const minimumLabelScale = (): number => {
+    const factor = Math.min(simulation.width, simulation.height) / 65.64;
+    if (factor <= 0) return MAX_SCALE;
+    let value = Math.log2(1 + Math.max(0, (MIN_LABEL_RADIUS - 0.5) / factor));
+    value = Math.min(MAX_SCALE, Math.max(MIN_SCALE, value));
+    while (value < MAX_SCALE && observationRadiusAt(value) < MIN_LABEL_RADIUS) {
+      value = Math.min(MAX_SCALE, value + 0.01);
+    }
+    return value;
   };
 
   const updateScaleInterface = (): void => {
     const diameter = observationDiameter();
+    const scaleText = diameter === 1 ? '1 spin' : `${diameter} × ${diameter}`;
     scaleInput.value = scale.toFixed(2);
-    scaleValue.textContent = diameter === 1 ? '1 spin' : `${diameter} × ${diameter}`;
+    scaleDock.value = scale.toFixed(2);
+    scaleValue.textContent = scaleText;
+    scaleReadout.textContent = scaleText;
     explanation.textContent = scaleCopy[Math.min(3, Math.floor(scale + 0.25))];
+    roughButton.setAttribute('aria-label', `Rough, observation scale ${scale.toFixed(2)}`);
+    smoothButton.setAttribute('aria-label', `Smooth, observation scale ${scale.toFixed(2)}`);
     document.documentElement.style.setProperty(
       '--noise-opacity',
       (0.12 * (1 - scale / 3) ** 2).toFixed(3),
@@ -133,8 +162,8 @@ async function main(): Promise<void> {
     const temperatureProgress = Math.max(0, Math.min(1, (
       temperature - MIN_TEMPERATURE
     ) / (MAX_TEMPERATURE - MIN_TEMPERATURE)));
-    freezeButton.style.setProperty('--temperature-progress', (1 - temperatureProgress).toFixed(4));
-    heatButton.style.setProperty('--temperature-progress', temperatureProgress.toFixed(4));
+    freezeButton.style.setProperty('--paddle-progress', (1 - temperatureProgress).toFixed(4));
+    heatButton.style.setProperty('--paddle-progress', temperatureProgress.toFixed(4));
     freezeButton.setAttribute('aria-label', `Freeze, current temperature ${temperature.toFixed(2)}`);
     heatButton.setAttribute('aria-label', `Heat, current temperature ${temperature.toFixed(2)}`);
     const distance = temperature - CRITICAL_TEMPERATURE;
@@ -177,6 +206,7 @@ async function main(): Promise<void> {
   };
 
   const syncPlaceLabels = (labels: PlaceLabel[]): void => {
+    placeLabels.classList.toggle('is-single-spin', observationDiameter() === 1);
     const seen = new Set<number>();
     for (const label of labels) {
       seen.add(label.id);
@@ -198,7 +228,8 @@ async function main(): Promise<void> {
         const spot = spots[index];
         if (node.dataset.kind !== label.kind) node.dataset.kind = label.kind;
         if (node.textContent !== label.text) node.textContent = label.text;
-        node.style.opacity = label.opacity.toFixed(3);
+        const detailOpacity = observationDiameter() < MAP_DIAMETER ? 0.7 : 1;
+        node.style.opacity = (label.opacity * detailOpacity).toFixed(3);
         node.style.fontSize = `${label.fontSize.toFixed(2)}px`;
         node.style.letterSpacing = `${label.letterSpacing.toFixed(2)}px`;
         node.style.transform = `translate(${spot.x.toFixed(2)}px, ${spot.y.toFixed(2)}px) rotate(${label.angle.toFixed(2)}deg) translate(-50%, -50%)`;
@@ -289,12 +320,14 @@ async function main(): Promise<void> {
     });
   };
 
-  scaleInput.addEventListener('input', () => {
-    scale = Number(scaleInput.value);
+  const applyScaleInput = (value: number): void => {
+    scale = value;
     targetScale = scale;
     updateScaleInterface();
     renderDirty = true;
-  });
+  };
+  scaleInput.addEventListener('input', () => applyScaleInput(Number(scaleInput.value)));
+  scaleDock.addEventListener('input', () => applyScaleInput(Number(scaleDock.value)));
 
   temperatureInput.addEventListener('input', () => {
     baseTemperature = Number(temperatureInput.value);
@@ -302,7 +335,7 @@ async function main(): Promise<void> {
     updateTemperatureInterface();
   });
 
-  const bindTemperatureHold = (
+  const bindHold = (
     button: HTMLButtonElement,
     holds: Set<string>,
   ): void => {
@@ -347,8 +380,10 @@ async function main(): Promise<void> {
     });
   };
 
-  bindTemperatureHold(freezeButton, freezeHolds);
-  bindTemperatureHold(heatButton, heatHolds);
+  bindHold(roughButton, roughHolds);
+  bindHold(smoothButton, smoothHolds);
+  bindHold(freezeButton, freezeHolds);
+  bindHold(heatButton, heatHolds);
 
   timeSpeedInput.addEventListener('input', () => {
     timeSpeed = Number(timeSpeedInput.value);
@@ -525,8 +560,12 @@ async function main(): Promise<void> {
     activePointers.clear();
     pinchActive = false;
     touchPaintPending = false;
+    roughHolds.clear();
+    smoothHolds.clear();
     freezeHolds.clear();
     heatHolds.clear();
+    roughButton.setAttribute('aria-pressed', 'false');
+    smoothButton.setAttribute('aria-pressed', 'false');
     freezeButton.setAttribute('aria-pressed', 'false');
     heatButton.setAttribute('aria-pressed', 'false');
     renderDirty = true;
@@ -548,15 +587,27 @@ async function main(): Promise<void> {
     const deltaSeconds = Math.min(0.1, rawDelta);
     previousFrame = timestamp;
 
-    const scaleDifference = targetScale - scale;
-    if (Math.abs(scaleDifference) > 0.0005) {
-      scale += scaleDifference * (1 - Math.exp(-deltaSeconds * 10));
+    const scaleDirection = Number(smoothHolds.size > 0) - Number(roughHolds.size > 0);
+    if (scaleDirection !== 0) {
+      const destination = scaleDirection < 0 ? MIN_SCALE : MAX_SCALE;
+      const step = scaleDirection * SCALE_HOLD_PER_SECOND * deltaSeconds;
+      scale = scaleDirection < 0
+        ? Math.max(destination, scale + step)
+        : Math.min(destination, scale + step);
+      targetScale = scale;
       updateScaleInterface();
       renderDirty = true;
-    } else if (scale !== targetScale) {
-      scale = targetScale;
-      updateScaleInterface();
-      renderDirty = true;
+    } else {
+      const scaleDifference = targetScale - scale;
+      if (Math.abs(scaleDifference) > 0.0005) {
+        scale += scaleDifference * (1 - Math.exp(-deltaSeconds * 10));
+        updateScaleInterface();
+        renderDirty = true;
+      } else if (scale !== targetScale) {
+        scale = targetScale;
+        updateScaleInterface();
+        renderDirty = true;
+      }
     }
 
     const temperatureDirection = Number(heatHolds.size > 0) - Number(freezeHolds.size > 0);
@@ -597,11 +648,11 @@ async function main(): Promise<void> {
       renderDirty = true;
     }
 
-    const labelMode: LabelMode = temperature > CHAOS_TEMPERATURE
-      ? 'chaos'
-      : observationDiameter() >= MAP_DIAMETER
-        ? 'map'
-        : 'hidden';
+    // Below the first scale that can carry place names, keep the names, but
+    // classify regions with that scale's observation. The labels then sit on
+    // the finer field as a convention, not as a feature of the fine structure.
+    const labelScale = observationDiameter() >= MAP_DIAMETER ? scale : minimumLabelScale();
+    const labelMode: LabelMode = temperature > CHAOS_TEMPERATURE ? 'chaos' : 'map';
     const viewport = canvas.getBoundingClientRect();
     const labels = places.advance(Math.min(0.5, rawDelta), labelMode, {
       width: viewport.width,
@@ -614,9 +665,9 @@ async function main(): Promise<void> {
       lastRegionRequest = timestamp;
       regionInFlight = true;
       const generation = placesGeneration;
-      void simulation.readRegionSample().then((sample) => {
+      void simulation.readRegionSample(observationRadiusAt(labelScale), labelScale).then((sample) => {
         if (generation !== placesGeneration || !sample) return;
-        if (temperature > CHAOS_TEMPERATURE || observationDiameter() < MAP_DIAMETER) return;
+        if (temperature > CHAOS_TEMPERATURE) return;
         places.ingest(sample);
       }).catch((error: unknown) => {
         console.warn('Could not read Ising regions.', error);
