@@ -34,8 +34,8 @@ const ingest = (tracker: PlaceTracker, rectangles: Array<[number, number, number
   tracker.ingest(sample(rectangles));
 };
 
-// A larger, younger continent joins an older island. The joined region keeps
-// the oldest name even though its cell overlap is smaller.
+// A larger, younger continent joins an older one. The larger body keeps the
+// moving label, then inherits some sounds from the smaller body after cooldown.
 const merged = new PlaceTracker();
 merged.advance(0.016, 'map', view);
 ingest(merged, [[4, 16, 10, 26]]);
@@ -48,11 +48,13 @@ const younger = separate.find((label) => label.text !== elder.text);
 assert(younger !== undefined, 'younger region reused the old name before joining');
 ingest(merged, [[4, 16, 10, 26], [16, 28, 17, 19], [28, 44, 8, 28]]);
 const joined = advance(merged);
-assert(joined.some((label) => label.text === elder.text && label.opacity > 0.8),
-  `joined region lost its oldest name (${joined.map((label) => label.text)})`);
-assert(!joined.some((label) => label.text === younger.text && label.opacity > 0.8),
-  'younger merged name remained fully visible');
-console.log('merge keeps oldest name', { elder: elder.text, younger: younger.text });
+assert(joined.some((label) => label.id === younger.id && label.text === younger.text && label.opacity > 0.8),
+  `larger region did not retain the moving label (${joined.map((label) => label.text)})`);
+ingest(merged, [[4, 16, 10, 26], [16, 28, 17, 19], [28, 44, 8, 28]], 5.1);
+const inherited = advance(merged);
+assert(inherited.some((label) => label.id === younger.id && label.text !== younger.text),
+  `merged name did not inherit from both parents (${inherited.map((label) => label.text)})`);
+console.log('merge inherits by area', { elder: elder.text, younger: younger.text, joined: inherited[0].text });
 
 // A narrow island moves to adjacent cells with zero mask overlap. Its old
 // inscription is carried along rather than replaced by a random new stem.

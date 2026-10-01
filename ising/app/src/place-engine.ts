@@ -1,4 +1,7 @@
-import { createPlaceStem, placeLabel, type PlaceKind } from './place-name';
+import {
+  createPlaceGenome, mutatePlaceGenome, nextPlaceGenomeStep, placeLabel, placeStem,
+  recombinePlaceGenomes, type PlaceGenome, type PlaceKind,
+} from './place-name';
 
 export type RegionSample = { width: number; height: number; signs: Int8Array };
 export type PlaceLabel = {
@@ -33,7 +36,10 @@ type Placement = {
   route: Pose[];
 };
 type Track = {
-  id: number; stem: string; kind: PlaceKind; text: string; area: number;
+  id: number; stem: string; genome: PlaceGenome; suffix: string; lineage: number;
+  pendingGenome: PlaceGenome | null; nameAnchor: Uint8Array | null;
+  nameStreak: number; lastNameChange: number; mutationSerial: number;
+  kind: PlaceKind; text: string; area: number;
   stability: number; agreement: number; missing: number; confirmed: boolean; present: boolean;
   center: Point; bounds: Component['bounds']; lastMask: Uint8Array | null;
   soft: Float32Array | null; placement: Placement | null; ghosts: Placement[];
@@ -42,6 +48,8 @@ type Track = {
 
 const STABILITY_RESPONSE = 0.7;
 const NAME_COOLDOWN_SECONDS = 5;
+const SHAPE_MUTATION_DISTANCE = 0.24;
+const SHAPE_MUTATION_STREAK = 3;
 const MIN_REGION_FRACTION = 0.0035;
 const MIN_ISLAND_FRACTION = 0.008;
 const LARGE_FRACTION = 0.055;
@@ -151,6 +159,7 @@ export class PlaceTracker {
       for (const track of this.tracks.values()) {
         if (track.soft) track.soft = this.regridFloat(track.soft, this.width, this.height, sample.width, sample.height);
         if (track.lastMask) track.lastMask = this.regrid(track.lastMask, this.width, this.height, sample.width, sample.height);
+        if (track.nameAnchor) track.nameAnchor = this.regrid(track.nameAnchor, this.width, this.height, sample.width, sample.height);
         const bodies = track.placement ? [track.placement, ...track.ghosts] : track.ghosts;
         for (const placement of bodies) {
           const shared = placement.mask === placement.regionMask;
@@ -171,6 +180,8 @@ export class PlaceTracker {
       .slice(0, MAX_TRACKS);
     type Offer = { region: number; track: Track; overlap: number; distance: number };
     const offers: Offer[] = [];
+    // Previous cell owners form a parent-to-child graph for this observation.
+    const contributions: Array<Map<number, number>> = [];
     const offerFor = (region: number, track: Track, overlap: number): Offer => {
       const anchor = track.placement?.alive
         ? { x: track.placement.position.x / this.viewport.width, y: track.placement.position.y / this.viewport.height }
@@ -188,13 +199,14 @@ export class PlaceTracker {
         if (!track || isLand(track.kind) !== (places[i].sign > 0) || overlap <= 0) continue;
         offers.push(offerFor(i, track, overlap));
       }
+      contributions.push(overlaps);
     }
     const matchedRegions = new Set<number>();
     const matchedTracks = new Set<number>();
     const assignments: Array<{ track: Track; region: Component; overlap: number }> = [];
     const assign = (candidates: Offer[]): void => {
-      candidates.sort((a, b) => a.track.id - b.track.id
-        || a.distance - b.distance || b.overlap - a.overlap);
+      candidates.sort((a, b) => b.overlap - a.overlap
+        || a.distance - b.distance || a.track.id - b.track.id);
       for (const offer of candidates) {
         if (matchedRegions.has(offer.region) || matchedTracks.has(offer.track.id)) continue;
         matchedRegions.add(offer.region);
@@ -238,20 +250,70 @@ export class PlaceTracker {
       }
     }
     assign(nearby);
+    const splitParents = new Set<number>();
+    for (const track of this.tracks.values()) {
+      let descendants = 0;
+      for (let i = 0; i < places.length; i += 1) {
+        if (isLand(track.kind) === (places[i].sign > 0)
+          && (contributions[i].get(track.id) ?? 0) >= places[i].area * 0.5) descendants += 1;
+      }
+      if (descendants > 1) splitParents.add(track.id);
+    }
     for (let i = 0; i < places.length; i += 1) {
       if (matchedRegions.has(i)) continue;
       const region = places[i];
       if (!region.kind) continue;
-      const stem = createPlaceStem(Math.random, this.usedStems);
+      const ancestor = [...contributions[i]]
+        .filter(([id, overlap]) => splitParents.has(id) && overlap >= region.area * 0.5
+          && isLand((this.tracks.get(id) as Track).kind) === (region.sign > 0))
+        .sort((a, b) => b[1] - a[1])
+        .map(([id]) => this.tracks.get(id))
+        .find((track): track is Track => track !== undefined);
+      let genome = ancestor
+        ? mutatePlaceGenome(ancestor.genome, this.nameSeed(region, ancestor.id), this.usedStems)
+        : createPlaceGenome(Math.random, this.usedStems);
+      if (this.usedStems.has(placeStem(genome))) genome = createPlaceGenome(Math.random, this.usedStems);
+      const stem = placeStem(genome);
       this.usedStems.add(stem);
+      const text = ancestor ? `${stem.charAt(0).toUpperCase()}${stem.slice(1)}${ancestor.suffix}`
+        : placeLabel(region.kind, stem);
+      const id = this.nextTrackId++;
       const track: Track = {
-        id: this.nextTrackId++, stem, kind: region.kind, text: placeLabel(region.kind, stem),
+        id, stem, genome, suffix: text.slice(stem.length), lineage: ancestor?.lineage ?? id,
+        pendingGenome: null, nameAnchor: null, nameStreak: 0, lastNameChange: now, mutationSerial: 0,
+        kind: region.kind, text,
         area: region.area, stability: 0.15, agreement: 1, missing: 0, confirmed: true, present: false,
         center: region.center, bounds: region.bounds, lastMask: null,
         soft: null, placement: null, ghosts: [], styleFont: 0,
       };
       this.tracks.set(track.id, track);
       assignments.push({ track, region, overlap: 0 });
+    }
+    for (const { track, region } of assignments) {
+      const index = places.indexOf(region);
+      const ancestors = [...contributions[index]]
+        .filter(([id, overlap]) => {
+          const source = this.tracks.get(id);
+          if (!source || isLand(source.kind) !== (region.sign > 0)) return false;
+          const genes = source.genome.syllables.length * 2 + 1;
+          return overlap / region.area >= 0.5 / genes;
+        })
+        .map(([id, overlap]) => ({ track: this.tracks.get(id) as Track, weight: overlap }))
+        .sort((a, b) => b.weight - a.weight || a.track.id - b.track.id);
+      if (ancestors.length > 1) {
+        const sameLineage = ancestors.every((entry) => entry.track.lineage === ancestors[0].track.lineage);
+        const target = sameLineage
+          ? [...ancestors].sort((a, b) => a.track.id - b.track.id)[0].track.genome
+          : recombinePlaceGenomes(ancestors.map(({ track: source, weight }) => ({ genome: source.genome, weight })));
+        if (placeStem(target) !== track.stem) track.pendingGenome = target;
+        track.lastNameChange = now;
+        track.nameStreak = 0;
+        track.nameAnchor = null;
+      } else if (splitParents.has(track.id)) {
+        track.lastNameChange = now;
+        track.nameStreak = 0;
+        track.nameAnchor = null;
+      }
     }
     const nextOwners = new Uint16Array(sample.signs.length);
     for (const { track, region, overlap } of assignments) {
@@ -260,8 +322,7 @@ export class PlaceTracker {
         const continuity = overlap / Math.min(track.area, region.area);
         track.agreement = Math.min(track.agreement, 0.65 + 0.35 * continuity);
       }
-      // A track's name is immutable. Size-classification changes do not mint
-      // a second name for the same place.
+      // Size-classification alone does not alter the inherited name.
       track.area = region.area;
       track.center = region.center;
       track.bounds = region.bounds;
@@ -285,12 +346,66 @@ export class PlaceTracker {
     }
     for (const { track, region } of assignments) {
       const mask = this.allowedMask(region);
+      this.evolveName(track, region, mask, now);
       track.lastMask = mask;
       this.remember(mask);
       this.smooth(track, mask, gap);
       this.aim(track, mask, gap);
     }
     this.synced = true;
+  }
+
+  private nameSeed(region: Component, lineage: number): number {
+    return Math.floor(region.center.x * 8191 + region.center.y * 16381
+      + region.area * 17 + lineage * 131);
+  }
+
+  private maskDistance(first: Uint8Array, second: Uint8Array): number {
+    let union = 0;
+    let intersection = 0;
+    for (let index = 0; index < second.length; index += 1) {
+      union += first[index] | second[index];
+      intersection += first[index] & second[index];
+    }
+    return union > 0 ? 1 - intersection / union : 0;
+  }
+
+  private rename(track: Track, genome: PlaceGenome, mask: Uint8Array, now: number): boolean {
+    const stem = placeStem(genome);
+    if (stem === track.stem || this.usedStems.has(stem)) return false;
+    const text = `${stem.charAt(0).toUpperCase()}${stem.slice(1)}${track.suffix}`;
+    const placement = track.placement;
+    if (placement?.alive && !this.fitsPose(placement.mask, text, this.snapshot(placement))) return false;
+    this.usedStems.delete(track.stem);
+    this.usedStems.add(stem);
+    track.genome = genome;
+    track.stem = stem;
+    track.text = text;
+    track.lastNameChange = now;
+    track.nameAnchor = mask.slice();
+    track.nameStreak = 0;
+    return true;
+  }
+
+  private evolveName(track: Track, region: Component, mask: Uint8Array, now: number): void {
+    if (!track.nameAnchor || track.nameAnchor.length !== mask.length) track.nameAnchor = mask.slice();
+    if (track.pendingGenome) {
+      if (now - track.lastNameChange < NAME_COOLDOWN_SECONDS) return;
+      const pending = track.pendingGenome;
+      const next = nextPlaceGenomeStep(track.genome, pending, this.usedStems);
+      if (!next && (placeStem(track.genome) === placeStem(pending)
+        || track.genome.syllables.length !== pending.syllables.length)) track.pendingGenome = null;
+      else if (next && this.rename(track, next, mask, now)
+        && placeStem(track.genome) === placeStem(pending)) track.pendingGenome = null;
+      return;
+    }
+    if (this.maskDistance(track.nameAnchor, mask) > SHAPE_MUTATION_DISTANCE) track.nameStreak += 1;
+    else track.nameStreak = 0;
+    if (track.nameStreak < SHAPE_MUTATION_STREAK
+      || now - track.lastNameChange < NAME_COOLDOWN_SECONDS) return;
+    const mutant = mutatePlaceGenome(track.genome,
+      this.nameSeed(region, track.lineage) + track.mutationSerial * 31, this.usedStems);
+    if (this.rename(track, mutant, mask, now)) track.mutationSerial += 1;
   }
 
   private aim(track: Track, mask: Uint8Array, elapsed: number): void {
