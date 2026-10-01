@@ -16,6 +16,7 @@ const SIMPLE_VOWELS = ['a', 'e', 'i', 'o', 'u'] as const;
 const VOWELS = ['a', 'e', 'i', 'o', 'u', 'a', 'e', 'i', 'o', 'ae', 'au', 'oe'] as const;
 const CODAS = ['n', 'r', 's', 'l', 'm', 't'] as const;
 const ENDINGS = ['a', 'us', 'um', 'is', 'or'] as const;
+const CONTINENT_ENDINGS = ['ia', 'ea', 'on', 'ar', 'is', 'um'] as const;
 
 const pick = (rng: Rng, choices: readonly string[], offset = 0): string =>
   choices[(Math.floor(rng() * choices.length) + offset) % choices.length];
@@ -73,27 +74,48 @@ const pronounceable = (genome: PlaceGenome): boolean => genome.syllables.every(
   ({ onset, vowel }) => onset !== 'qu' || !['u', 'au', 'oe'].includes(vowel),
 );
 
+// A geometric tail makes each additional changed gene less likely. Heating
+// can raise the continuation chance without replacing the family's spelling.
+export const mutationMagnitude = (
+  rng: Rng, continuation: number, minimum = 1, maximum = 4,
+): number => {
+  let magnitude = minimum;
+  while (magnitude < maximum && rng() < continuation) magnitude += 1;
+  return magnitude;
+};
+
 export const mutatePlaceGenome = (
-  genome: PlaceGenome, seed: number, banned?: ReadonlySet<string>,
+  genome: PlaceGenome, seed: number, banned?: ReadonlySet<string>, changes = 1,
 ): PlaceGenome => {
   const loci = genome.syllables.length * 2 + 1;
-  for (let offset = 0; offset < loci; offset += 1) {
-    const locus = (Math.abs(seed) + offset) % loci;
-    const previous = allele(genome, locus);
-    const choices = locus === loci - 1 ? CODAS
-      : locus % 2 === 1 ? VOWELS
-        : locus === 0 ? FIRST_ONSETS : INNER_ONSETS;
-    const alternatives = [...new Set(choices)].filter((value) => value.length === previous.length
-      && value !== previous);
-    if (alternatives.length === 0) continue;
-    for (let attempt = 0; attempt < alternatives.length; attempt += 1) {
-      const value = alternatives[(Math.abs(seed + offset * 7) + attempt) % alternatives.length];
-      const candidate = withAllele(genome, locus, value);
-      const stem = placeStem(candidate);
-      if (stem.length <= 8 && pronounceable(candidate) && !banned?.has(stem)) return candidate;
+  let result = cloneGenome(genome);
+  const changed = new Set<number>();
+  for (let step = 0; step < Math.min(changes, loci); step += 1) {
+    let next: PlaceGenome | null = null;
+    for (let offset = 0; offset < loci && !next; offset += 1) {
+      const locus = (Math.abs(seed) + step + offset) % loci;
+      if (changed.has(locus)) continue;
+      const previous = allele(result, locus);
+      const choices = locus === loci - 1 ? CODAS
+        : locus % 2 === 1 ? VOWELS
+          : locus === 0 ? FIRST_ONSETS : INNER_ONSETS;
+      const alternatives = [...new Set(choices)].filter((value) => value.length === previous.length
+        && value !== previous);
+      for (let attempt = 0; attempt < alternatives.length; attempt += 1) {
+        const value = alternatives[(Math.abs(seed + offset * 7 + step * 11) + attempt) % alternatives.length];
+        const candidate = withAllele(result, locus, value);
+        const stem = placeStem(candidate);
+        if (stem.length <= 8 && pronounceable(candidate) && !banned?.has(stem)) {
+          next = candidate;
+          changed.add(locus);
+          break;
+        }
+      }
     }
+    if (!next) break;
+    result = next;
   }
-  return cloneGenome(genome);
+  return result;
 };
 
 export const recombinePlaceGenomes = (
@@ -142,9 +164,30 @@ export const nextPlaceGenomeStep = (
   return null;
 };
 
+// A cold region borrows one compatible sound from an established neighbour.
+// The recipient keeps its syllable count and total length, so its label can
+// stay in the same seat while its spelling gradually approaches the donor's.
+export const borrowPlaceGenomeGene = (
+  current: PlaceGenome, donor: PlaceGenome, seed: number, banned?: ReadonlySet<string>,
+): PlaceGenome | null => {
+  const loci = current.syllables.length * 2 + 1;
+  for (let offset = 0; offset < loci; offset += 1) {
+    const locus = (Math.abs(seed) + offset) % loci;
+    const donorLocus = locus === loci - 1 ? donor.syllables.length * 2
+      : Math.min(Math.floor(locus / 2), donor.syllables.length - 1) * 2 + locus % 2;
+    const desired = allele(donor, donorLocus);
+    if (desired === allele(current, locus) || desired.length !== allele(current, locus).length) continue;
+    const candidate = withAllele(current, locus, desired);
+    if (placeStem(candidate).length <= 8 && pronounceable(candidate)
+      && !banned?.has(placeStem(candidate))) return candidate;
+  }
+  return null;
+};
+
 export const placeLabel = (kind: PlaceKind, stem: string): string => {
   const name = `${stem.charAt(0).toUpperCase()}${stem.slice(1)}`;
-  if (kind === 'continent') return `${name}ia`;
-  const ending = ENDINGS[[...stem].reduce((hash, letter) => hash + letter.charCodeAt(0), 0) % ENDINGS.length];
+  const hash = [...stem].reduce((sum, letter) => sum + letter.charCodeAt(0), 0);
+  const endings = kind === 'continent' ? CONTINENT_ENDINGS : ENDINGS;
+  const ending = endings[hash % endings.length];
   return `${name}${ending}`;
 };

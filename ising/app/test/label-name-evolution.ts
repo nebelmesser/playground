@@ -1,6 +1,7 @@
 import { PlaceTracker, type PlaceLabel } from '../src/place-engine.ts';
 import {
-  mutatePlaceGenome, placeStem, recombinePlaceGenomes, type PlaceGenome,
+  mutatePlaceGenome, mutationMagnitude, placeLabel, placeStem,
+  recombinePlaceGenomes, type PlaceGenome,
 } from '../src/place-name.ts';
 
 const assert = (condition: boolean, message: string): void => {
@@ -20,6 +21,23 @@ const child = mutatePlaceGenome(first, 7, new Set([placeStem(first)]));
 assert(loci(child).filter((gene, index) => gene !== loci(first)[index]).length === 1,
   'split descendant did not inherit all but one name gene');
 assert(placeStem(child).length === placeStem(first).length, 'mutation changed inscription length');
+const distantChild = mutatePlaceGenome(first, 77, new Set([placeStem(first)]), 4);
+assert(loci(distantChild).filter((gene, index) => gene !== loci(first)[index]).length === 4,
+  'rare descendant did not replace four distinct genes');
+let magnitudeSeed = 0x7231;
+const magnitudeRng = () => ((magnitudeSeed = (Math.imul(magnitudeSeed, 1664525) + 1013904223) >>> 0)
+  / 0x100000000);
+const magnitudes = [0, 0, 0, 0, 0];
+for (let trial = 0; trial < 10000; trial += 1) {
+  magnitudes[mutationMagnitude(magnitudeRng, 0.28)] += 1;
+}
+assert(magnitudes[1] > magnitudes[2] && magnitudes[2] > magnitudes[3]
+  && magnitudes[3] > magnitudes[4] && magnitudes[4] > 100,
+  `mutation strength is not rare-tailed (${magnitudes.join(',')})`);
+const continentStems = ['soran', 'metis', 'furam', 'panor', 'valen', 'goris', 'tular', 'norem'];
+const continentSuffixes = new Set(continentStems.map((stem) =>
+  placeLabel('continent', stem).slice(stem.length)));
+assert(continentSuffixes.size >= 3, 'new continents still all receive the same ending');
 const dominant = recombinePlaceGenomes([
   { genome: first, weight: 80 }, { genome: second, weight: 20 },
 ]);
@@ -83,8 +101,9 @@ const parent = tracks.get(ancestor.id);
 const sibling = tracks.get(inherited.id);
 assert(parent !== undefined && sibling !== undefined && parent.lineage === sibling.lineage,
   'split descendants lost their common lineage');
-assert(loci(parent.genome).filter((gene, index) => gene !== loci(sibling.genome)[index]).length === 1,
-  'split child inherited more than one changed gene');
+const splitDistance = loci(parent.genome).filter((gene, index) => gene !== loci(sibling.genome)[index]).length;
+assert(splitDistance >= 1 && splitDistance <= 4,
+  'split descendant lost its family resemblance');
 ingest(split, whole, 0.5);
 const reunited = settle(split);
 assert(reunited.some((label) => label.id === ancestor.id && label.text === ancestor.text),
@@ -92,6 +111,23 @@ assert(reunited.some((label) => label.id === ancestor.id && label.text === ances
 ingest(split, pieces, 0.5);
 const resplit = settle(split);
 assert(resplit.some((label) => label.text === inherited.text), 'brief repeated split invented another name');
+
+const rareSplit = new PlaceTracker();
+rareSplit.advance(0.016, 'map', view);
+ingest(rareSplit, whole);
+const rareAncestor = settle(rareSplit)[0];
+const regularRandom = Math.random;
+Math.random = () => 0; // The geometric tail reaches its rare, four-gene outcome.
+ingest(rareSplit, pieces);
+Math.random = regularRandom;
+const rareChild = settle(rareSplit).find((label) => label.id !== rareAncestor.id);
+assert(rareChild !== undefined, 'rare split did not create a descendant');
+const rareTracks = (rareSplit as unknown as { tracks: Map<number, { genome: PlaceGenome }> }).tracks;
+const rareParentGenome = rareTracks.get(rareAncestor.id)?.genome;
+const rareChildGenome = rareTracks.get(rareChild.id)?.genome;
+assert(rareParentGenome !== undefined && rareChildGenome !== undefined
+  && loci(rareParentGenome).filter((gene, index) => gene !== loci(rareChildGenome)[index]).length >= 3,
+  'rare split did not produce a distinctly named descendant');
 
 const original: Rect[] = [[8, 30, 10, 26]];
 const enlarged: Rect[] = [[8, 39, 10, 26]];
@@ -114,8 +150,10 @@ const evolved = settle(evolving)[0];
 assert(evolved.text !== initial.text, 'sustained shape change did not mutate one gene');
 const evolvedTrack = (evolving as unknown as { tracks: Map<number, { genome: PlaceGenome }> }).tracks.get(evolved.id);
 assert(evolvedTrack !== undefined, 'evolved track was lost');
-assert(loci(evolvedTrack.genome).filter((gene, index) => gene !== loci(initialGenome)[index]).length === 1,
-  'one sustained shape change altered more than one gene');
+const shapeDifference = loci(evolvedTrack.genome)
+  .filter((gene, index) => gene !== loci(initialGenome)[index]).length;
+assert(shapeDifference >= 1 && shapeDifference <= 4,
+  'one sustained shape change did not produce a bounded mutation');
 for (let sampleIndex = 0; sampleIndex < 20; sampleIndex += 1) ingest(evolving, enlarged, 0.3);
 assert(settle(evolving)[0].text === evolved.text, 'unchanged shape kept mutating after its anchor was updated');
 

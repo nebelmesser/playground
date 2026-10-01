@@ -199,7 +199,8 @@ const run = async (): Promise<void> => {
   named.ingest(sample(6, 26));
   const continent = settle(named);
   assert(continent.length === 1, 'continent setup has no label');
-  assert(continent[0].text.endsWith('ia') && !continent[0].text.includes('island'), `expected a continent name, got ${continent[0].text}`);
+  assert(continent[0].kind === 'continent' && /^[A-Z][a-z]+$/.test(continent[0].text)
+    && !continent[0].text.includes('island'), `expected a continent name, got ${continent[0].text}`);
   await sleep(300);
   named.ingest(sample(12, 20, 12, 20));
   let present = 0;

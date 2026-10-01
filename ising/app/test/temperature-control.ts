@@ -39,7 +39,13 @@ for (const direction of [-1, 1] as const) {
   const coarse = trace(direction, 1 / 30, 0.6);
   assert(Math.abs(values.at(-1)! - coarse.at(-1)!) < 1e-10,
     'temperature ramp depends on frame rate');
-  const end = trace(direction, 1 / 60, 5).at(-1)!;
+  const oneSecond = trace(direction, 1 / 60, 1).at(-1)!;
+  assert(Math.abs(oneSecond - base) > 0.03 && Math.abs(oneSecond - base) < 0.12,
+    'one-second hold should change temperature gently while still being measurable');
+  const fiveSeconds = trace(direction, 1 / 60, 5).at(-1)!;
+  assert(fiveSeconds > min && fiveSeconds < max,
+    'temperature traversed its range too quickly');
+  const end = trace(direction, 1 / 60, 30).at(-1)!;
   assert(end === (direction < 0 ? min : max), 'temperature passed its limit');
 }
 

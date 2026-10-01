@@ -1,5 +1,5 @@
-const ACCELERATION_SECONDS = 0.7;
-const RANGE_TRAVEL_SECONDS = 1.8;
+const ACCELERATION_SECONDS = 2.4;
+const RANGE_TRAVEL_SECONDS = 12;
 
 export const advanceHeldTemperature = (
   temperature: number,

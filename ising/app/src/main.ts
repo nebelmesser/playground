@@ -12,6 +12,7 @@ import { advanceHeldTemperature, temperaturePaddleProgress } from './temperature
 const CRITICAL_TEMPERATURE = 2 / Math.log(1 + Math.sqrt(2));
 const HALF_STEPS_PER_SECOND = 30;
 const MAP_DIAMETER = 40;
+const DEFAULT_OBSERVATION_DIAMETER = 45;
 
 const byId = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
@@ -278,6 +279,12 @@ async function main(): Promise<void> {
   const resize = (preserve = true): void => {
     const metrics = targetGrid();
     simulation.resize(metrics.width, metrics.height, metrics.density, preserve);
+    if (!preserve) {
+      const factor = Math.min(simulation.width, simulation.height) / 65.64;
+      const radius = (DEFAULT_OBSERVATION_DIAMETER - 1) / 2;
+      scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.log2(1 + radius / factor)));
+      targetScale = scale;
+    }
     updateScaleInterface();
     renderDirty = true;
     drawNow();
@@ -713,7 +720,7 @@ async function main(): Promise<void> {
     const labels = places.advance(Math.min(0.5, rawDelta), labelMode, {
       width: viewport.width,
       height: viewport.height,
-    });
+    }, temperatureDirection > 0);
     syncPlaceLabels(labels, rawDelta);
 
     if (renderDirty) drawNow();
@@ -726,7 +733,7 @@ async function main(): Promise<void> {
         if (temperature > CHAOS_TEMPERATURE) return;
         labelLight = sample;
         lightVersion += 1;
-        places.ingest(sample);
+        places.ingest(sample, temperature);
       }).catch((error: unknown) => {
         console.warn('Could not read Ising regions.', error);
       }).finally(() => {
