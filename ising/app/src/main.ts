@@ -1,6 +1,10 @@
 import './style.css';
 import { requestGpu } from './gpu/device';
 import { GpuIsing, type CursorState } from './gpu/ising';
+import {
+  advanceInkTransition, blendedInkColor, inkTransitionFrame, labelInkContrast, updateLabelInk,
+  type InkState, type InkTransition, type LuminanceField,
+} from './label-ink';
 import { labelPositions, PlaceTracker, type LabelMode, type PlaceLabel } from './place-engine';
 import { advanceHeldTemperature, temperaturePaddleProgress } from './temperature-control';
 
@@ -91,6 +95,11 @@ async function main(): Promise<void> {
   let lastRegionRequest = 0;
   const places = new PlaceTracker();
   const labelNodes = new Map<number, HTMLSpanElement[]>();
+  const labelInk = new Map<number, InkState>();
+  const labelInkMotion = new Map<number, InkTransition>();
+  let labelLight: LuminanceField | null = null;
+  let lightVersion = 0;
+  const labelLightVersions = new Map<number, number>();
   const roughHolds = new Set<string>();
   const smoothHolds = new Set<string>();
   const freezeHolds = new Set<string>();
@@ -204,14 +213,27 @@ async function main(): Promise<void> {
   const resetPlaces = (): void => {
     placesGeneration += 1;
     places.reset();
-    syncPlaceLabels([]);
+    labelLight = null;
+    labelInk.clear();
+    labelInkMotion.clear();
+    labelLightVersions.clear();
+    syncPlaceLabels([], 0);
   };
 
-  const syncPlaceLabels = (labels: PlaceLabel[]): void => {
-    placeLabels.classList.toggle('is-single-spin', observationDiameter() === 1);
+  const syncPlaceLabels = (labels: PlaceLabel[], seconds: number): void => {
     const seen = new Set<number>();
+    const viewport = { width: canvas.clientWidth, height: canvas.clientHeight };
     for (const label of labels) {
       seen.add(label.id);
+      if (labelLight && labelLightVersions.get(label.id) !== lightVersion) {
+        const measured = labelInkContrast(label, labelLight, viewport);
+        labelInk.set(label.id, updateLabelInk(labelInk.get(label.id), measured));
+        labelLightVersions.set(label.id, lightVersion);
+      }
+      const inkMotion = advanceInkTransition(labelInkMotion.get(label.id), labelInk.get(label.id)?.mode ?? 'dark', seconds);
+      labelInkMotion.set(label.id, inkMotion);
+      const inkFrame = inkTransitionFrame(inkMotion);
+      const color = blendedInkColor(label.kind, inkMotion.from, inkMotion.to, inkFrame.blend);
       const spots = labelPositions(label);
       let nodes = labelNodes.get(label.id);
       if (!nodes) {
@@ -230,8 +252,8 @@ async function main(): Promise<void> {
         const spot = spots[index];
         if (node.dataset.kind !== label.kind) node.dataset.kind = label.kind;
         if (node.textContent !== label.text) node.textContent = label.text;
-        const detailOpacity = observationDiameter() < MAP_DIAMETER ? 0.7 : 1;
-        node.style.opacity = (label.opacity * detailOpacity).toFixed(3);
+        node.style.color = color;
+        node.style.opacity = (label.opacity * inkFrame.opacity).toFixed(3);
         node.style.fontSize = `${label.fontSize.toFixed(2)}px`;
         node.style.letterSpacing = `${label.letterSpacing.toFixed(2)}px`;
         node.style.transform = `translate(${spot.x.toFixed(2)}px, ${spot.y.toFixed(2)}px) rotate(${label.angle.toFixed(2)}deg) translate(-50%, -50%)`;
@@ -241,6 +263,9 @@ async function main(): Promise<void> {
       if (seen.has(id)) continue;
       for (const node of nodes) node.remove();
       labelNodes.delete(id);
+      labelInk.delete(id);
+      labelInkMotion.delete(id);
+      labelLightVersions.delete(id);
     }
   };
 
@@ -254,6 +279,7 @@ async function main(): Promise<void> {
     // Discard any sample taken against the previous GPU dimensions, but keep
     // place identity and normalized label positions across viewport resizes.
     placesGeneration += 1;
+    labelLight = null;
   };
 
   const pointerPoint = (event: PointerEvent): Point | null => {
@@ -682,7 +708,7 @@ async function main(): Promise<void> {
       width: viewport.width,
       height: viewport.height,
     });
-    syncPlaceLabels(labels);
+    syncPlaceLabels(labels, rawDelta);
 
     if (renderDirty) drawNow();
     if (!regionInFlight && labelMode === 'map' && timestamp - lastRegionRequest > 280) {
@@ -692,6 +718,8 @@ async function main(): Promise<void> {
       void simulation.readRegionSample(observationRadiusAt(labelScale), labelScale).then((sample) => {
         if (generation !== placesGeneration || !sample) return;
         if (temperature > CHAOS_TEMPERATURE) return;
+        labelLight = sample;
+        lightVersion += 1;
         places.ingest(sample);
       }).catch((error: unknown) => {
         console.warn('Could not read Ising regions.', error);

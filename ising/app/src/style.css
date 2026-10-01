@@ -58,34 +58,19 @@ input { font: inherit; }
   top: 0;
   left: 0;
   margin: 0;
-  color: #3d1a10;
+  color: #060403;
   font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
   font-weight: 500;
   font-kerning: none;
   line-height: 1;
   white-space: nowrap;
   transform-origin: 0 0;
-  -webkit-text-stroke: 0.5px #fff;
-  paint-order: stroke fill;
+  -webkit-text-stroke: 0;
 }
 
-.place-label[data-kind="sea"],
 .place-label[data-kind="lake"] {
   font-style: italic;
-}
-
-.place-label[data-kind="sea"] {
-  color: #152456;
-}
-
-.place-label[data-kind="lake"] {
-  color: #b9e7ff;
-  -webkit-text-stroke: 0.35px #183b57;
-}
-
-.place-labels.is-single-spin .place-label[data-kind="lake"] {
-  color: rgba(9, 23, 42, 0.76);
-  -webkit-text-stroke: 0;
+  color: #020913;
 }
 
 .panel {

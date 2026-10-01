@@ -87,6 +87,7 @@ struct RegionParams {
 
 @group(0) @binding(16) var<uniform> region_params: RegionParams;
 @group(0) @binding(17) var<storage, read_write> region_cells: array<i32>;
+@group(0) @binding(18) var display_field: texture_2d<f32>;
 
 var<workgroup> group_magnetization: array<i32, 256>;
 var<workgroup> group_energy: array<i32, 256>;
@@ -342,6 +343,18 @@ fn palette(value: f32) -> vec3<f32> {
   return mix(neutral, target_color, pow(abs(value), 0.38));
 }
 
+fn linear_channel(value: f32) -> f32 {
+  return select(value / 12.92, pow((value + 0.055) / 1.055, 2.4), value > 0.04045);
+}
+
+fn palette_luminance(value: f32) -> f32 {
+  let color = palette(value);
+  return dot(
+    vec3<f32>(linear_channel(color.r), linear_channel(color.g), linear_channel(color.b)),
+    vec3<f32>(0.2126, 0.7152, 0.0722),
+  );
+}
+
 fn observed_value(uv: vec2<f32>) -> f32 {
   return textureSampleLevel(observed_field, field_sampler, uv, 0.0).r;
 }
@@ -378,7 +391,17 @@ fn sample_regions(@builtin(global_invocation_id) gid: vec3<u32>) {
     + textureSampleLevel(observed_field, field_sampler, origin + cell * vec2<f32>(0.25, 0.75), 0.0).r
     + textureSampleLevel(observed_field, field_sampler, origin + cell * vec2<f32>(0.75, 0.75), 0.0).r
   ) * 0.25;
-  region_cells[gid.y * region_params.coarse.x + gid.x] = select(-1, 1, value >= 0.0);
+  // Keep the label-scale sign for geography, but measure the displayed field
+  // before averaging colors. Orange and blue pixels stay bright even when
+  // their signed values cancel within one coarse cell.
+  let luminance = (
+    palette_luminance(textureSampleLevel(display_field, field_sampler, origin + cell * vec2<f32>(0.25, 0.25), 0.0).r)
+    + palette_luminance(textureSampleLevel(display_field, field_sampler, origin + cell * vec2<f32>(0.75, 0.25), 0.0).r)
+    + palette_luminance(textureSampleLevel(display_field, field_sampler, origin + cell * vec2<f32>(0.25, 0.75), 0.0).r)
+    + palette_luminance(textureSampleLevel(display_field, field_sampler, origin + cell * vec2<f32>(0.75, 0.75), 0.0).r)
+  ) * 0.25;
+  let encoded = 1 + i32(round(clamp(luminance, 0.0, 1.0) * 65534.0));
+  region_cells[gid.y * region_params.coarse.x + gid.x] = select(-encoded, encoded, value >= 0.0);
 }
 
 @fragment

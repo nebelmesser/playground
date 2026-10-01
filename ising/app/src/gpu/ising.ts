@@ -379,7 +379,9 @@ export class GpuIsing {
     this.device.queue.submit([encoder.finish()]);
   }
 
-  async readRegionSample(radius: number, scale: number): Promise<{ width: number; height: number; signs: Int8Array } | null> {
+  async readRegionSample(radius: number, scale: number): Promise<{
+    width: number; height: number; signs: Int8Array; luminance: Float32Array;
+  } | null> {
     const group = this.regionGroup;
     if (!group || !this.observationReady() || this.regionReadback.mapState !== 'unmapped') return null;
     const coarse = regionGrid(this.width, this.height);
@@ -405,8 +407,12 @@ export class GpuIsing {
     try {
       const mapped = new Int32Array(this.regionReadback.getMappedRange(), 0, words);
       const signs = new Int8Array(words);
-      for (let index = 0; index < words; index += 1) signs[index] = mapped[index] < 0 ? -1 : 1;
-      return { width: coarse.width, height: coarse.height, signs };
+      const luminance = new Float32Array(words);
+      for (let index = 0; index < words; index += 1) {
+        signs[index] = mapped[index] < 0 ? -1 : 1;
+        luminance[index] = (Math.abs(mapped[index]) - 1) / 65534;
+      }
+      return { width: coarse.width, height: coarse.height, signs, luminance };
     } finally {
       this.regionReadback.unmap();
     }
@@ -602,6 +608,7 @@ export class GpuIsing {
         { binding: 15, resource: this.blurViews[1] },
         { binding: 16, resource: { buffer: this.regionUniform } },
         { binding: 17, resource: { buffer: this.regionStorage } },
+        { binding: 18, resource: this.blurViews[1] },
       ],
     });
     if (!this.labelBlurViews) return;
@@ -645,6 +652,7 @@ export class GpuIsing {
         { binding: 15, resource: this.labelBlurViews[1] },
         { binding: 16, resource: { buffer: this.regionUniform } },
         { binding: 17, resource: { buffer: this.regionStorage } },
+        { binding: 18, resource: this.blurViews[1] },
       ],
     });
   }
