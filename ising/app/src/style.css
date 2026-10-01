@@ -408,6 +408,8 @@ input[type="range"]::-moz-range-thumb {
   pointer-events: none;
 }
 
+.temperature-paddle .paddle-progress { opacity: 1; }
+
 .paddle-label {
   position: absolute;
   z-index: 1;

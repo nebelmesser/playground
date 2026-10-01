@@ -45,7 +45,7 @@ const NAME_COOLDOWN_SECONDS = 5;
 const MIN_REGION_FRACTION = 0.0035;
 const MIN_ISLAND_FRACTION = 0.008;
 const LARGE_FRACTION = 0.055;
-const MAX_LAKE_FRACTION = 0.018;
+const MAX_LAKE_SIDE_FRACTION = 1 / 4;
 const MAX_TRACKS = 48;
 const TEXT_HEIGHT_EM = 1.35;
 const TRACKING_EM = 0.16;
@@ -59,6 +59,9 @@ const AXIS_COST = 0.22;
 const SEAT_ORIENTATION_COST = 0.05;
 const SEAT_AXIS_COST = 0.12;
 const SPRING_RESPONSE = 0.85;
+const PATH_SPRING_RESPONSE = 0.25;
+const INTERIOR_VISCOSITY = 3;
+const MAX_PATH_ACCEL = 8;
 const FIELD_RESPONSE = 1.8;
 const MAX_GLIDE_SPEED = 140;
 const MAX_FONT_SPEED = 28;
@@ -627,6 +630,7 @@ export class PlaceTracker {
   }
 
   private glide(track: Track, placement: Placement, dt: number): void {
+    if (dt <= 0) return;
     const from = this.snapshot(placement);
     if (!this.fitsPose(placement.mask, track.text, from)) {
       const legal = this.maxFont(placement.mask, track.text, placement.position, placement.angle);
@@ -664,11 +668,37 @@ export class PlaceTracker {
     // Route segments were checked by posesFit as one interpolation in pose
     // space. Advance position, font and angle with the same parameter so the
     // rendered body stays on that checked path.
-    const duration = Math.max(this.distance(from, aim) / MAX_GLIDE_SPEED,
-      Math.abs(aim.font - from.font) / MAX_FONT_SPEED,
-      Math.abs(aim.angle - from.angle) / MAX_ANGLE_SPEED);
-    let pose = this.lerpPose(from, aim, duration > 0 ? Math.min(1, dt / duration) : 1);
-    if (!this.fitsPose(placement.mask, track.text, pose)) {
+    const touchingCoast = !this.fitsPose(placement.regionMask, track.text, from);
+    const viscosity = touchingCoast ? 1 : INTERIOR_VISCOSITY;
+    const glideSpeed = MAX_GLIDE_SPEED / viscosity;
+    const fontSpeed = MAX_FONT_SPEED / viscosity;
+    const angleSpeed = MAX_ANGLE_SPEED / viscosity;
+    const displacement = this.distance(from, aim);
+    const moveDuration = displacement / glideSpeed;
+    const fontDuration = Math.abs(aim.font - from.font) / fontSpeed;
+    const turnDuration = Math.abs(aim.angle - from.angle) / angleSpeed;
+    const duration = Math.max(moveDuration, fontDuration, turnDuration);
+    let pathSpeed = 0;
+    if (duration === moveDuration && displacement > 0) {
+      pathSpeed = ((aim.x - from.x) * placement.velocity.x
+        + (aim.y - from.y) * placement.velocity.y) / displacement / glideSpeed;
+    } else if (duration === fontDuration && fontDuration > 0) {
+      pathSpeed = Math.sign(aim.font - from.font) * placement.fontVelocity / fontSpeed;
+    } else if (turnDuration > 0) {
+      pathSpeed = Math.sign(aim.angle - from.angle) * placement.angleVelocity / angleSpeed;
+    }
+    // A retarget may put the new aim behind the current motion. Keep that
+    // signed momentum so turning and translation brake before reversing.
+    pathSpeed = clamp(pathSpeed, -1, 1);
+    const omega = 2 / (PATH_SPRING_RESPONSE * viscosity);
+    const acceleration = clamp(omega * omega * duration - 2 * omega * pathSpeed,
+      -MAX_PATH_ACCEL, MAX_PATH_ACCEL);
+    const nextSpeed = clamp(pathSpeed + acceleration * dt, -1, 1);
+    const progress = Math.min(duration, (pathSpeed + nextSpeed) * dt / 2);
+    let pose = this.lerpPose(from, aim, duration > 0 ? progress / duration : 1);
+    if (!(progress < 0
+      ? this.posesFit(placement.mask, track.text, from, pose)
+      : this.fitsPose(placement.mask, track.text, pose))) {
       const fitted = this.longestLegal(track.text, placement.mask, from, pose);
       if (!fitted) {
         placement.velocity = { x: 0, y: 0 };
@@ -773,9 +803,11 @@ export class PlaceTracker {
 
   private components(signs: Int8Array): Component[] {
     const seen = new Uint8Array(signs.length);
+    const componentAt = new Int32Array(signs.length);
     const found: Component[] = [];
     for (let start = 0; start < signs.length; start += 1) {
       if (seen[start]) continue;
+      const componentId = found.length;
       const sign = signs[start] < 0 ? -1 : 1;
       const cells: number[] = [];
       let sumX = 0;
@@ -789,6 +821,7 @@ export class PlaceTracker {
       while (stack.length) {
         const index = stack.pop() as number;
         cells.push(index);
+        componentAt[index] = componentId;
         const x = index % this.width;
         const y = Math.floor(index / this.width);
         sumX += x + 0.5;
@@ -814,7 +847,8 @@ export class PlaceTracker {
           kind = 'island';
           role = 'place';
         }
-      } else if (fraction > MAX_LAKE_FRACTION
+      } else if ((maxX - minX > this.width * MAX_LAKE_SIDE_FRACTION
+        && maxY - minY > this.height * MAX_LAKE_SIDE_FRACTION)
         || minX === 0 || minY === 0 || maxX === this.width || maxY === this.height) {
         role = 'sea';
       } else if (fraction >= MIN_REGION_FRACTION) {
@@ -825,6 +859,25 @@ export class PlaceTracker {
         center: { x: sumX / cells.length / this.width, y: sumY / cells.length / this.height },
         bounds: { x0: minX / this.width, y0: minY / this.height,
           x1: maxX / this.width, y1: maxY / this.height } });
+    }
+    for (const component of found) {
+      if (component.kind !== 'lake') continue;
+      const shore = new Map<number, number>();
+      let total = 0;
+      for (const cell of component.cells) {
+        for (const neighbor of this.neighbors(cell)) {
+          const owner = componentAt[neighbor];
+          if (found[owner].sign < 0) continue;
+          shore.set(owner, (shore.get(owner) ?? 0) + 1);
+          total += 1;
+        }
+      }
+      // A lake belongs to one landmass. Water between several equally sized
+      // shores is a strait or sea, even when its footprint is small.
+      if (total === 0 || Math.max(...shore.values()) * 5 < total * 4) {
+        component.kind = null;
+        component.role = 'sea';
+      }
     }
     return found;
   }
@@ -891,7 +944,8 @@ export class PlaceTracker {
   }
 
   private fitsPose(mask: Uint8Array, text: string, pose: Pose): boolean {
-    return this.fits(mask, text, pose, pose.font, trackingOf(pose.font), pose.angle);
+    return Math.abs(pose.angle) <= MAX_ANGLE
+      && this.fits(mask, text, pose, pose.font, trackingOf(pose.font), pose.angle);
   }
 
   private posesFit(mask: Uint8Array, text: string, from: Pose, to: Pose): boolean {
@@ -913,7 +967,7 @@ export class PlaceTracker {
     let high = 1;
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const middle = (low + high) / 2;
-      if (this.fitsPose(mask, text, this.lerpPose(from, to, middle))) low = middle;
+      if (this.posesFit(mask, text, from, this.lerpPose(from, to, middle))) low = middle;
       else high = middle;
     }
     if (low <= 0) return null;

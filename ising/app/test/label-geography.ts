@@ -61,11 +61,57 @@ const waterMap = (box: [number, number, number, number], open = false) => {
   }
   return { width: waterWidth, height: waterHeight, signs };
 };
+type TrackProbe = { tracks: Map<number, { kind: string;
+  placement: { mask: Uint8Array; regionMask: Uint8Array; route: unknown[] } | null }> };
+const waterWithIsland = (islandSize: number) => {
+  const map = waterMap([18, 36, 16, 29]);
+  for (let y = 20; y < 20 + islandSize; y += 1) {
+    for (let x = 25; x < 25 + islandSize; x += 1) map.signs[x + y * waterWidth] = 1;
+  }
+  return map;
+};
+const shorelineOwner = (islandSize: number): boolean => {
+  const tracker = new PlaceTracker();
+  tracker.advance(0.016, 'map', waterView);
+  tracker.ingest(waterWithIsland(islandSize));
+  return [...(tracker as unknown as TrackProbe).tracks.values()].some((track) => track.kind === 'lake');
+};
+const classifiedAsLake = (box: [number, number, number, number]): boolean => {
+  const tracker = new PlaceTracker();
+  tracker.advance(0.016, 'map', waterView);
+  tracker.ingest(waterMap(box));
+  return [...(tracker as unknown as TrackProbe).tracks.values()].some((track) => track.kind === 'lake');
+};
 const lake = new PlaceTracker();
 lake.advance(0.016, 'map', waterView);
 lake.ingest(waterMap([18, 30, 16, 28]));
 const first = settle(lake, waterView).find((label) => label.kind === 'lake');
 assert(first !== undefined, 'small enclosed water did not receive a label');
+
+// A water body becomes too large only if both spans exceed a quarter of the
+// frame. One long dimension alone still permits a named lake.
+for (const box of [
+  [18, 46, 16, 36], // 28×20: exactly one quarter in both dimensions
+  [18, 88, 16, 26], // 70×10: long and horizontal
+  [18, 30, 16, 66], // 12×50: long and vertical
+  [18, 47, 16, 36], // 29×20: only width crosses the threshold
+  [18, 46, 16, 37], // 28×21: only height crosses the threshold
+] as [number, number, number, number][]) {
+  assert(classifiedAsLake(box), `lake with at most one oversized span lost its name (${box})`);
+}
+assert(!classifiedAsLake([18, 47, 16, 37]),
+  'lake larger than a quarter in both dimensions kept its name');
+for (const box of [[18, 88, 16, 26], [18, 30, 16, 66]] as [number, number, number, number][]) {
+  const tracker = new PlaceTracker();
+  tracker.advance(0.016, 'map', waterView);
+  tracker.ingest(waterMap(box));
+  assert(settle(tracker, waterView).some((label) => label.kind === 'lake'),
+    `one-dimensionally long lake did not show its name (${box})`);
+}
+// The outer continent owns 62 shoreline edges. An inner 3×3 island adds 12
+// edges (62/74 > 80%); a 4×4 island adds 16 (62/78 < 80%).
+assert(shorelineOwner(3), 'lake with one dominant shore was rejected');
+assert(!shorelineOwner(4), 'water with less than 80% of its shore on one landmass was called a lake');
 
 // The same lake loses its western shore. The inscription must move inside the
 // new water footprint instead of remaining pinned to its first position.
@@ -75,8 +121,6 @@ assert(shifted !== undefined && shifted.id === first.id && shifted.text === firs
   'moving shore replaced the lake inscription');
 assert(shifted.x > first.x + 15 && shifted.opacity > 0.85,
   `lake label did not respond to its shore (${first.x.toFixed(0)} → ${shifted.x.toFixed(0)})`);
-type TrackProbe = { tracks: Map<number, { kind: string;
-  placement: { mask: Uint8Array; regionMask: Uint8Array; route: unknown[] } | null }> };
 const shiftedTrack = [...(lake as unknown as TrackProbe).tracks.values()].find((track) => track.kind === 'lake');
 assert(shiftedTrack?.placement?.route.length === 0
   && shiftedTrack.placement.mask === shiftedTrack.placement.regionMask,
@@ -93,7 +137,7 @@ assert(lakeTrack?.placement?.mask[18 + 20 * waterWidth] === 0,
 
 // An enlarged lake is no longer a small cartographic object. Its existing
 // inscription fades promptly instead of staying visible for the name cooldown.
-lake.ingest(waterMap([18, 38, 12, 32]));
+lake.ingest(waterMap([18, 57, 12, 40]));
 let afterGrowth: PlaceLabel[] = [];
 for (let frame = 0; frame < 45; frame += 1) afterGrowth = lake.advance(1 / 30, 'map', waterView);
 assert(afterGrowth.every((label) => label.kind !== 'lake' || label.opacity < 0.1),
@@ -105,5 +149,7 @@ open.advance(0.016, 'map', waterView);
 open.ingest(waterMap([18, 30, 16, 28], true));
 assert(settle(open, waterView).every((label) => label.kind !== 'lake'),
   'sea inlet received a lake name');
-console.log('lake size and enclosure', { smallArea: 144, largeArea: 400 });
+console.log('lake geometry', { acceptedBoxes: '28×20 / 70×10 / 12×50 / 29×20 / 28×21',
+  rejectedBox: '29×21',
+  acceptedShore: '62/74', rejectedShore: '62/78' });
 console.log('ok');

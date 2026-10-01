@@ -79,18 +79,27 @@ console.log('narrow region angle', verticalLabels[0].angle);
 vertical.ingest(rectangles([[10, 38, 8, 28]]));
 let widened = verticalLabels[0];
 let leastOpacity = 1;
+const turnTrail: number[] = [widened.angle];
 for (let tick = 0; tick < 150; tick += 1) {
   if (tick > 0 && tick % 9 === 0) vertical.ingest(rectangles([[10, 38, 8, 28]]));
   const label = frame(vertical, 1 / 30).find((candidate) => candidate.id === verticalLabels[0].id);
   assert(label !== undefined, 'widening region replaced its inscription');
   leastOpacity = Math.min(leastOpacity, label.opacity);
   widened = label;
+  turnTrail.push(label.angle);
 }
 assert(Math.abs(widened.angle) <= 10,
   `inscription stayed steep after horizontal room opened (${widened.angle.toFixed(1)}°)`);
 assert(leastOpacity > 0.75, `inscription blinked while rotating (${leastOpacity.toFixed(2)})`);
+const turnSteps = turnTrail.slice(1).map((angle, index) => Math.abs(angle - turnTrail[index]));
+const maxTurnStep = Math.max(...turnSteps);
+assert(turnSteps[0] < maxTurnStep * 0.4 && maxTurnStep < 2,
+  `orientation did not ease into the turn (${turnSteps[0].toFixed(2)}° → ${maxTurnStep.toFixed(2)}°)`);
+assert(Math.max(...turnSteps.slice(1).map((step, index) => Math.abs(step - turnSteps[index]))) < 0.5,
+  'orientation changed speed abruptly');
 console.log('wide region releases steep angle', { from: verticalLabels[0].angle,
-  to: Number(widened.angle.toFixed(1)), minimumOpacity: Number(leastOpacity.toFixed(2)) });
+  to: Number(widened.angle.toFixed(1)), minimumOpacity: Number(leastOpacity.toFixed(2)),
+  maxTurnStep: Number(maxTurnStep.toFixed(2)) });
 
 // Both full-sized poses fit the same narrow region. Direct simultaneous
 // translation and rotation clips the coast, but shrinking, moving, turning,

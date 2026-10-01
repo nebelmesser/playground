@@ -2,6 +2,7 @@ import './style.css';
 import { requestGpu } from './gpu/device';
 import { GpuIsing, type CursorState } from './gpu/ising';
 import { labelPositions, PlaceTracker, type LabelMode, type PlaceLabel } from './place-engine';
+import { advanceHeldTemperature, temperaturePaddleProgress } from './temperature-control';
 
 const CRITICAL_TEMPERATURE = 2 / Math.log(1 + Math.sqrt(2));
 const HALF_STEPS_PER_SECOND = 30;
@@ -99,8 +100,9 @@ async function main(): Promise<void> {
   const MAX_SCALE = Number(scaleInput.max);
   const MIN_TEMPERATURE = Number(temperatureInput.min);
   const MAX_TEMPERATURE = Number(temperatureInput.max);
-  const HOLD_RESPONSE_SECONDS = 1.35;
   const RETURN_RESPONSE_SECONDS = 0.75;
+  let temperatureHoldSeconds = 0;
+  let previousTemperatureDirection = 0;
   const SCALE_HOLD_PER_SECOND = (MAX_SCALE - MIN_SCALE) / 2.2;
   const MIN_LABEL_RADIUS = Math.ceil((MAP_DIAMETER - 1) / 2);
 
@@ -159,11 +161,11 @@ async function main(): Promise<void> {
   const updateTemperatureInterface = (): void => {
     temperatureInput.value = temperature.toFixed(2);
     temperatureValue.textContent = `T = ${temperature.toFixed(2)}`;
-    const temperatureProgress = Math.max(0, Math.min(1, (
-      temperature - MIN_TEMPERATURE
-    ) / (MAX_TEMPERATURE - MIN_TEMPERATURE)));
-    freezeButton.style.setProperty('--paddle-progress', (1 - temperatureProgress).toFixed(4));
-    heatButton.style.setProperty('--paddle-progress', temperatureProgress.toFixed(4));
+    const progress = temperaturePaddleProgress(
+      temperature, baseTemperature, MIN_TEMPERATURE, MAX_TEMPERATURE,
+    );
+    freezeButton.style.setProperty('--paddle-progress', progress.freeze.toFixed(4));
+    heatButton.style.setProperty('--paddle-progress', progress.heat.toFixed(4));
     freezeButton.setAttribute('aria-label', `Freeze, current temperature ${temperature.toFixed(2)}`);
     heatButton.setAttribute('aria-label', `Heat, current temperature ${temperature.toFixed(2)}`);
     const distance = temperature - CRITICAL_TEMPERATURE;
@@ -332,6 +334,7 @@ async function main(): Promise<void> {
   temperatureInput.addEventListener('input', () => {
     baseTemperature = Number(temperatureInput.value);
     temperature = baseTemperature;
+    temperatureHoldSeconds = 0;
     updateTemperatureInterface();
   });
 
@@ -404,12 +407,26 @@ async function main(): Promise<void> {
     renderDirty = true;
   });
 
-  settingsToggle.addEventListener('click', () => {
-    settingsOpen = !settingsOpen;
+  const setSettingsOpen = (open: boolean): void => {
+    settingsOpen = open;
     settingsPanel.classList.toggle('is-closed', !settingsOpen);
     settingsPanel.setAttribute('aria-hidden', String(!settingsOpen));
     settingsToggle.setAttribute('aria-expanded', String(settingsOpen));
     settingsToggle.setAttribute('aria-label', settingsOpen ? 'Close settings' : 'Open settings');
+  };
+
+  settingsToggle.addEventListener('click', () => setSettingsOpen(!settingsOpen));
+  document.addEventListener('pointerdown', (event) => {
+    const target = event.target;
+    if (!settingsOpen || !(target instanceof Node)
+      || settingsPanel.contains(target) || settingsToggle.contains(target)) return;
+    setSettingsOpen(false);
+  }, { capture: true });
+  document.addEventListener('click', (event) => {
+    const target = event.target;
+    if (!settingsOpen || !(target instanceof Node) || settingsToggle.contains(target)) return;
+    if (!settingsPanel.contains(target)
+      || (target instanceof Element && target.closest('button'))) setSettingsOpen(false);
   });
 
   pauseButton.addEventListener('click', () => {
@@ -564,6 +581,8 @@ async function main(): Promise<void> {
     smoothHolds.clear();
     freezeHolds.clear();
     heatHolds.clear();
+    temperatureHoldSeconds = 0;
+    previousTemperatureDirection = 0;
     roughButton.setAttribute('aria-pressed', 'false');
     smoothButton.setAttribute('aria-pressed', 'false');
     freezeButton.setAttribute('aria-pressed', 'false');
@@ -611,21 +630,26 @@ async function main(): Promise<void> {
     }
 
     const temperatureDirection = Number(heatHolds.size > 0) - Number(freezeHolds.size > 0);
-    const targetTemperature = temperatureDirection < 0
-      ? MIN_TEMPERATURE
-      : temperatureDirection > 0
-        ? MAX_TEMPERATURE
-        : baseTemperature;
-    const temperatureResponse = temperatureDirection === 0
-      ? RETURN_RESPONSE_SECONDS
-      : HOLD_RESPONSE_SECONDS;
-    const temperatureDifference = targetTemperature - temperature;
-    if (Math.abs(temperatureDifference) > 0.0005) {
-      temperature += temperatureDifference * (1 - Math.exp(-deltaSeconds / temperatureResponse));
+    if (temperatureDirection !== previousTemperatureDirection) {
+      temperatureHoldSeconds = 0;
+      previousTemperatureDirection = temperatureDirection;
+    }
+    if (temperatureDirection !== 0) {
+      temperature = advanceHeldTemperature(
+        temperature, temperatureDirection as -1 | 1,
+        temperatureHoldSeconds, deltaSeconds, MIN_TEMPERATURE, MAX_TEMPERATURE,
+      );
+      temperatureHoldSeconds += deltaSeconds;
       updateTemperatureInterface();
-    } else if (temperature !== targetTemperature) {
-      temperature = targetTemperature;
-      updateTemperatureInterface();
+    } else {
+      const difference = baseTemperature - temperature;
+      if (Math.abs(difference) > 0.0005) {
+        temperature += difference * (1 - Math.exp(-deltaSeconds / RETURN_RESPONSE_SECONDS));
+        updateTemperatureInterface();
+      } else if (temperature !== baseTemperature) {
+        temperature = baseTemperature;
+        updateTemperatureInterface();
+      }
     }
 
     if (!paused) {
