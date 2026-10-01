@@ -2,13 +2,18 @@ import type { PlaceLabel } from './place-engine';
 
 export type LuminanceField = { width: number; height: number; luminance: Float32Array };
 export type InkMode = 'dark' | 'light';
-export type InkState = { mode: InkMode; darkContrast: number; lightContrast: number };
+export type InkState = {
+  mode: InkMode; darkContrast: number; lightContrast: number;
+  weakSamples: number; opacity: number;
+};
 export type InkTransition = { from: InkMode; to: InkMode; progress: number; velocity: number };
 
 const INKS = {
-  land: { dark: '#060403', light: '#fffefd' },
-  water: { dark: '#020913', light: '#fcfeff' },
+  land: { dark: '#050302', light: '#ffd5a6' },
+  water: { dark: '#06132e', light: '#c4eaff' },
 } as const;
+
+const clamp = (value: number, low: number, high: number): number => Math.max(low, Math.min(high, value));
 
 const linearChannel = (channel: number): number => (
   channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
@@ -78,16 +83,27 @@ export const updateLabelInk = (
   current: InkState | undefined,
   measured: { dark: number; light: number },
 ): InkState => {
-  // Filter changing terrain and require a clear contrast advantage before
-  // retargeting the continuous ink animation.
+  // Keep the established ink while it remains legible. A locally better
+  // alternative is not a reason to recolor a drifting inscription.
   const darkContrast = current ? current.darkContrast * 0.55 + measured.dark * 0.45 : measured.dark;
   const lightContrast = current ? current.lightContrast * 0.55 + measured.light * 0.45 : measured.light;
-  let mode = current?.mode ?? (darkContrast >= lightContrast ? 'dark' : 'light');
+  let mode = current?.mode ?? (darkContrast >= 2.5 || lightContrast < 4.5 ? 'dark' : 'light');
   const alternate = mode === 'dark' ? lightContrast : darkContrast;
   const selected = mode === 'dark' ? darkContrast : lightContrast;
-  if (alternate > selected * 1.22) mode = mode === 'dark' ? 'light' : 'dark';
-  return { mode, darkContrast, lightContrast };
+  const weakSamples = selected < (mode === 'dark' ? 2.5 : 3)
+    && alternate > 4.5 ? (current?.weakSamples ?? 0) + 1 : 0;
+  const switchInk = weakSamples >= 5;
+  if (switchInk) mode = mode === 'dark' ? 'light' : 'dark';
+  return {
+    mode, darkContrast, lightContrast, weakSamples: switchInk ? 0 : weakSamples,
+    opacity: mode === 'dark' ? clamp(0.82 + (5 - darkContrast) * 0.06, 0.82, 1) : 1,
+  };
 };
+
+export const advanceInkOpacity = (current: number | undefined, target: number, seconds: number): number => (
+  current === undefined ? target
+    : current + (target - current) * (1 - Math.exp(-clamp(seconds, 0, 0.5) / 0.8))
+);
 
 export const advanceInkTransition = (
   current: InkTransition | undefined,
@@ -119,6 +135,6 @@ export const inkTransitionFrame = (state: InkTransition): { blend: number; opaci
   const eased = state.progress * state.progress * (3 - 2 * state.progress);
   return {
     blend: eased,
-    opacity: 1 - 0.2 * Math.sin(Math.PI * eased) ** 2,
+    opacity: 1,
   };
 };

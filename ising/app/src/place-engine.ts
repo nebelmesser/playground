@@ -751,9 +751,24 @@ export class PlaceTracker {
   }
 
   private relight(track: Track, pose: Pose, mask: Uint8Array): void {
-    if (track.placement) {
-      track.placement.alive = false;
-      track.ghosts.push(track.placement);
+    const current = track.placement;
+    if (current) {
+      const oldPose = this.snapshot(current);
+      // Two renderings whose footprints intersect are the same visual place.
+      // If its shape cannot accommodate the turn yet, wait at the last legal
+      // pose instead of fading out and respawning at a different angle there.
+      if (this.fitsPose(current.mask, track.text, oldPose)
+        && this.overlaps(track.text, oldPose, track.text, pose)) {
+        current.target = oldPose;
+        current.route = [];
+        current.velocity = { x: 0, y: 0 };
+        current.fontVelocity = 0;
+        current.angleVelocity = 0;
+        current.regionMask = mask;
+        return;
+      }
+      current.alive = false;
+      track.ghosts.push(current);
     }
     track.placement = this.spawn(pose, mask);
   }

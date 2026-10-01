@@ -1,5 +1,6 @@
 import {
-  advanceInkTransition, blendedInkColor, inkColor, inkTransitionFrame, labelInkContrast, updateLabelInk,
+  advanceInkOpacity, advanceInkTransition, blendedInkColor, inkColor, inkTransitionFrame,
+  labelInkContrast, updateLabelInk,
   type InkState,
 } from '../src/label-ink.ts';
 
@@ -25,7 +26,19 @@ const blue = choose(0.318);
 assert(neutral.mode === 'light' && neutral.lightContrast > 12, 'neutral field needs readable light ink');
 assert(orange.mode === 'dark' && orange.darkContrast > 5, 'bright orange needs dark ink');
 assert(blue.mode === 'dark' && blue.darkContrast > 5, 'bright blue needs dark ink');
-assert(inkColor('lake', 'light') !== inkColor('lake', 'dark'), 'lake ink needs both tones');
+assert(inkColor('island', 'dark') === '#050302', 'land dark ink is no longer black');
+assert(inkColor('island', 'light') === '#ffd5a6', 'dark land needs light orange, never white');
+assert(inkColor('lake', 'dark') === '#06132e', 'bright water needs dark blue');
+assert(inkColor('lake', 'light') === '#c4eaff', 'dark water needs light blue');
+assert(orange.opacity < neutral.opacity && orange.opacity >= 0.82,
+  'dark ink should soften only on a high-contrast background');
+for (const size of [16, 64, 256]) {
+  const field = { width: size, height: size, luminance: new Float32Array(size * size).fill(0.317) };
+  assert(updateLabelInk(undefined, labelInkContrast(label, field, viewport)).mode === 'dark',
+    `bright terrain chose light land ink at ${size}×${size}`);
+  assert(updateLabelInk(undefined, labelInkContrast({ ...label, kind: 'lake' }, field, viewport)).mode === 'dark',
+    `bright water chose light blue ink at ${size}×${size}`);
+}
 const minimumContrasts: number[] = [];
 for (const kind of ['island', 'lake'] as const) {
   let minimumContrast = Infinity;
@@ -33,7 +46,7 @@ for (const kind of ['island', 'lake'] as const) {
     const sample = labelInkContrast({ ...label, kind }, uniform(step / 1000), viewport);
     minimumContrast = Math.min(minimumContrast, Math.max(sample.dark, sample.light));
   }
-  assert(minimumContrast > 4.4, `${kind} ink loses contrast at an intermediate shade (${minimumContrast.toFixed(2)})`);
+  assert(minimumContrast > 3.7, `${kind} ink loses contrast at an intermediate shade (${minimumContrast.toFixed(2)})`);
   minimumContrasts.push(minimumContrast);
 }
 
@@ -42,8 +55,28 @@ for (const nearThreshold of [0.17, 0.19, 0.16, 0.20, 0.18, 0.17]) {
   state = choose(nearThreshold, state);
   assert(state.mode === 'dark', 'minor changes around the contrast boundary made the ink blink');
 }
-for (let sample = 0; sample < 5; sample += 1) state = choose(0.008, state);
+for (let sample = 0; sample < 4; sample += 1) {
+  state = choose(0.008, state);
+  assert(state.mode === 'dark', 'brief dark fluctuation recolored the label');
+}
+for (let sample = 0; sample < 8; sample += 1) state = choose(0.008, state);
 assert(state.mode === 'light', 'ink failed to adapt after the background became dark');
+for (let sample = 0; sample < 4; sample += 1) {
+  state = choose(0.317, state);
+  assert(state.mode === 'light', 'brief bright fluctuation recolored the label');
+}
+for (let sample = 0; sample < 8; sample += 1) state = choose(0.317, state);
+assert(state.mode === 'dark', 'ink failed to recover after the background became bright');
+
+let opacity = orange.opacity;
+let largestAlphaStep = 0;
+for (let frame = 0; frame < 120; frame += 1) {
+  const next = advanceInkOpacity(opacity, neutral.opacity, 1 / 60);
+  largestAlphaStep = Math.max(largestAlphaStep, Math.abs(next - opacity));
+  opacity = next;
+}
+assert(largestAlphaStep < 0.01 && Math.abs(opacity - neutral.opacity) < 0.02,
+  `ink opacity did not ease (${largestAlphaStep.toFixed(3)} per frame)`);
 
 const diagonalField = uniform(0.008);
 for (let y = 0; y < 100; y += 1) {
@@ -86,8 +119,7 @@ assert(crossedMidpoint && transition.from === 'light' && transition.to === 'ligh
   && previousFrame.opacity === 1, 'continuous ink transition did not finish');
 assert(firstColorStep < largestColorStep * 0.3 && lastColorStep < largestColorStep * 0.3,
   'ink color did not ease at both ends');
-assert(minimumOpacity > 0.79 && minimumOpacity < 0.82,
-  `ink opacity made a visible blink (${minimumOpacity.toFixed(3)})`);
+assert(minimumOpacity === 1, `ink color transition dimmed the label (${minimumOpacity.toFixed(3)})`);
 assert(largestColorStep < 12 && largestOpacityStep < 0.03,
   `color or opacity jerked in one frame (${largestColorStep.toFixed(2)}, ${largestOpacityStep.toFixed(3)})`);
 

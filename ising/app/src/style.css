@@ -58,7 +58,7 @@ input { font: inherit; }
   top: 0;
   left: 0;
   margin: 0;
-  color: #060403;
+  color: #050302;
   font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
   font-weight: 500;
   font-kerning: none;
@@ -70,7 +70,7 @@ input { font: inherit; }
 
 .place-label[data-kind="lake"] {
   font-style: italic;
-  color: #020913;
+  color: #06132e;
 }
 
 .panel {

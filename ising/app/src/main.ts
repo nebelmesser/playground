@@ -2,7 +2,8 @@ import './style.css';
 import { requestGpu } from './gpu/device';
 import { GpuIsing, type CursorState } from './gpu/ising';
 import {
-  advanceInkTransition, blendedInkColor, inkTransitionFrame, labelInkContrast, updateLabelInk,
+  advanceInkOpacity, advanceInkTransition, blendedInkColor, inkTransitionFrame, labelInkContrast,
+  updateLabelInk,
   type InkState, type InkTransition, type LuminanceField,
 } from './label-ink';
 import { labelPositions, PlaceTracker, type LabelMode, type PlaceLabel } from './place-engine';
@@ -97,6 +98,7 @@ async function main(): Promise<void> {
   const labelNodes = new Map<number, HTMLSpanElement[]>();
   const labelInk = new Map<number, InkState>();
   const labelInkMotion = new Map<number, InkTransition>();
+  const labelInkOpacity = new Map<number, number>();
   let labelLight: LuminanceField | null = null;
   let lightVersion = 0;
   const labelLightVersions = new Map<number, number>();
@@ -216,6 +218,7 @@ async function main(): Promise<void> {
     labelLight = null;
     labelInk.clear();
     labelInkMotion.clear();
+    labelInkOpacity.clear();
     labelLightVersions.clear();
     syncPlaceLabels([], 0);
   };
@@ -234,6 +237,8 @@ async function main(): Promise<void> {
       labelInkMotion.set(label.id, inkMotion);
       const inkFrame = inkTransitionFrame(inkMotion);
       const color = blendedInkColor(label.kind, inkMotion.from, inkMotion.to, inkFrame.blend);
+      const opacity = advanceInkOpacity(labelInkOpacity.get(label.id), labelInk.get(label.id)?.opacity ?? 1, seconds);
+      labelInkOpacity.set(label.id, opacity);
       const spots = labelPositions(label);
       let nodes = labelNodes.get(label.id);
       if (!nodes) {
@@ -253,7 +258,7 @@ async function main(): Promise<void> {
         if (node.dataset.kind !== label.kind) node.dataset.kind = label.kind;
         if (node.textContent !== label.text) node.textContent = label.text;
         node.style.color = color;
-        node.style.opacity = (label.opacity * inkFrame.opacity).toFixed(3);
+        node.style.opacity = (label.opacity * opacity).toFixed(3);
         node.style.fontSize = `${label.fontSize.toFixed(2)}px`;
         node.style.letterSpacing = `${label.letterSpacing.toFixed(2)}px`;
         node.style.transform = `translate(${spot.x.toFixed(2)}px, ${spot.y.toFixed(2)}px) rotate(${label.angle.toFixed(2)}deg) translate(-50%, -50%)`;
@@ -265,6 +270,7 @@ async function main(): Promise<void> {
       labelNodes.delete(id);
       labelInk.delete(id);
       labelInkMotion.delete(id);
+      labelInkOpacity.delete(id);
       labelLightVersions.delete(id);
     }
   };
