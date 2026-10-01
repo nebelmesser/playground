@@ -35,8 +35,7 @@ const ingest = (tracker: PlaceTracker, rectangles: Array<[number, number, number
 };
 
 // A larger, younger continent joins an older one. The larger body keeps the
-// moving label, then inherits some sounds from the smaller body more slowly
-// because the merged region is large.
+// moving label, then expresses an inherited crossover after its cooldown.
 const merged = new PlaceTracker();
 merged.advance(0.016, 'map', view);
 ingest(merged, [[4, 16, 10, 26]]);
@@ -51,10 +50,10 @@ ingest(merged, [[4, 16, 10, 26], [16, 28, 17, 19], [28, 44, 8, 28]]);
 const joined = advance(merged);
 assert(joined.some((label) => label.id === younger.id && label.text === younger.text && label.opacity > 0.8),
   `larger region did not retain the moving label (${joined.map((label) => label.text)})`);
-ingest(merged, [[4, 16, 10, 26], [16, 28, 17, 19], [28, 44, 8, 28]], 5.1);
+ingest(merged, [[4, 16, 10, 26], [16, 28, 17, 19], [28, 44, 8, 28]], 4);
 const stillDominant = advance(merged);
 assert(stillDominant.some((label) => label.id === younger.id && label.text === younger.text),
-  'large merged region changed its name at the minimum cooldown');
+  'merged region changed its name before five seconds');
 ingest(merged, [[4, 16, 10, 26], [16, 28, 17, 19], [28, 44, 8, 28]], 7.1);
 const inherited = advance(merged);
 assert(inherited.some((label) => label.id === younger.id && label.text !== younger.text),
@@ -74,7 +73,7 @@ assert(moved.some((label) => label.text === first.text),
   `adjacent continuation invented a new name (${first.text} -> ${moved.map((label) => label.text)})`);
 console.log('adjacent continuation keeps name', first.text);
 
-// The 5-second cooldown remembers a briefly absent region; after it expires
+// The independent 5-second spatial memory recalls an absent region; after it expires
 // a genuinely new region may receive a fresh name.
 const returning = new PlaceTracker();
 returning.advance(0.016, 'map', view);

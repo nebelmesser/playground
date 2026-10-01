@@ -9,9 +9,9 @@ Math.random = () => {
 const assert = (condition: boolean, message: string): void => {
   if (!condition) throw new Error(message);
 };
-const settle = (tracker: PlaceTracker, view: { width: number; height: number }): PlaceLabel[] => {
+const settle = (tracker: PlaceTracker, view: { width: number; height: number }, frames = 90): PlaceLabel[] => {
   let labels: PlaceLabel[] = [];
-  for (let frame = 0; frame < 90; frame += 1) labels = tracker.advance(1 / 30, 'map', view);
+  for (let frame = 0; frame < frames; frame += 1) labels = tracker.advance(1 / 30, 'map', view);
   return labels;
 };
 
@@ -62,7 +62,7 @@ const waterMap = (box: [number, number, number, number], open = false) => {
   return { width: waterWidth, height: waterHeight, signs };
 };
 type TrackProbe = { tracks: Map<number, { kind: string;
-  genome: { syllables: unknown[] }; suffix: string;
+  name: { genome: { syllables: unknown[] } }; text: string;
   placement: { mask: Uint8Array; regionMask: Uint8Array; route: unknown[] } | null }> };
 const waterWithIsland = (islandSize: number) => {
   const map = waterMap([18, 36, 16, 29]);
@@ -89,7 +89,7 @@ lake.ingest(waterMap([18, 30, 16, 28]));
 const first = settle(lake, waterView).find((label) => label.kind === 'lake');
 assert(first !== undefined, 'small enclosed water did not receive a label');
 assert([...(lake as unknown as TrackProbe).tracks.values()].some((track) =>
-  track.kind === 'lake' && track.genome.syllables.length === 2),
+  track.kind === 'lake' && track.name.genome.syllables.length === 2),
   'medium lake did not receive a two-syllable name');
 
 // These footprints were below the old area cutoffs. A short inscription must
@@ -101,7 +101,7 @@ const tinyLakeLabel = settle(tinyLake, waterView).find((label) => label.kind ===
 assert(tinyLakeLabel !== undefined && tinyLakeLabel.opacity > 0.8,
   'newly admitted 5×5 lake did not show a label');
 assert([...(tinyLake as unknown as TrackProbe).tracks.values()].some((track) =>
-  track.kind === 'lake' && track.genome.syllables.length === 1 && track.suffix === ''),
+  track.kind === 'lake' && track.name.genome.syllables.length === 1),
   'tiny lake did not receive a one-syllable name');
 for (let trial = 0; trial < 12; trial += 1) {
   const candidate = new PlaceTracker();
@@ -112,8 +112,8 @@ for (let trial = 0; trial < 12; trial += 1) {
     `one-syllable lake variant ${trial} failed to fit its 5×5 shore`);
 }
 
-// If the old text no longer fits after a shrink, shorten it at once and keep
-// the same moving inscription instead of fading it out and respawning nearby.
+// A smaller footprint cannot bypass the genetic cooldown. The track keeps
+// its spelling while the placement system fits it or waits for expression.
 const shrinkingLake = new PlaceTracker();
 shrinkingLake.advance(0.016, 'map', waterView);
 shrinkingLake.ingest(waterMap([18, 30, 16, 28]));
@@ -125,10 +125,9 @@ assert(shrinkingTrack !== undefined, 'shrinking lake lost its tracked identity')
 shrinkingLake.ingest(waterMap([21, 27, 19, 24]));
 const afterShrink = settle(shrinkingLake, waterView).find((label) => label.kind === 'lake');
 assert([...((shrinkingLake as unknown as TrackProbe).tracks.values())].includes(shrinkingTrack)
-  && shrinkingTrack.genome.syllables.length === 1 && shrinkingTrack.suffix === ''
-  && afterShrink !== undefined && afterShrink.id === beforeShrink.id
-  && afterShrink.text.length < beforeShrink.text.length && afterShrink.opacity > 0.8,
-  'shrinking lake failed to keep and shorten its own name');
+  && shrinkingTrack.name.genome.syllables.length === 2 && shrinkingTrack.text === beforeShrink.text
+  && (!afterShrink || afterShrink.text === beforeShrink.text),
+  'shrinking lake bypassed its genetic cooldown or lost its tracked identity');
 
 const tinyIslandSigns = new Int8Array(waterWidth * waterHeight).fill(-1);
 for (let y = 30; y < 37; y += 1) {
@@ -141,7 +140,7 @@ const tinyIslandLabel = settle(tinyIsland, waterView).find((label) => label.kind
 assert(tinyIslandLabel !== undefined && tinyIslandLabel.opacity > 0.8,
   'newly admitted 7×7 island did not show a label');
 assert([...(tinyIsland as unknown as TrackProbe).tracks.values()].some((track) =>
-  track.kind === 'island' && track.genome.syllables.length === 1 && track.suffix === ''),
+  track.kind === 'island' && track.name.genome.syllables.length === 1),
   'tiny island did not receive a one-syllable name');
 
 const mediumIslandSigns = new Int8Array(waterWidth * waterHeight).fill(-1);
@@ -154,7 +153,7 @@ mediumIsland.ingest({ width: waterWidth, height: waterHeight, signs: mediumIslan
 assert(settle(mediumIsland, waterView).some((label) => label.kind === 'island'),
   'medium island did not show its label');
 assert([...(mediumIsland as unknown as TrackProbe).tracks.values()].some((track) =>
-  track.kind === 'island' && track.genome.syllables.length === 2 && track.suffix === ''),
+  track.kind === 'island' && track.name.genome.syllables.length === 2),
   'medium island did not receive a two-syllable name');
 
 // A water body becomes sea only if both spans exceed half of the
@@ -195,7 +194,8 @@ assert(!shorelineOwner(4), 'water with less than 80% of its shore on one landmas
 // The same lake loses its western shore. The inscription must move inside the
 // new water footprint instead of remaining pinned to its first position.
 lake.ingest(waterMap([21, 30, 16, 28]));
-const shifted = settle(lake, waterView).find((label) => label.kind === 'lake');
+// Allow the spring to settle a full quarter-turn for shorter genetic names.
+const shifted = settle(lake, waterView, 180).find((label) => label.kind === 'lake');
 assert(shifted !== undefined && shifted.id === first.id && shifted.text === first.text,
   'moving shore replaced the lake inscription');
 assert(shifted.x > first.x + 15 && shifted.opacity > 0.85,

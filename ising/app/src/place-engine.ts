@@ -1,8 +1,4 @@
-import {
-  borrowPlaceGenomeGene, createPlaceGenome, extendPlaceGenome, mutatePlaceGenome, mutationMagnitude,
-  nextPlaceGenomeStep, placeLabel, placeStem, shortenPlaceGenome,
-  recombinePlaceGenomes, type PlaceGenome, type PlaceKind,
-} from './place-name';
+import { NameEvolution, placeStem, type NameProposal, type PlaceGenome, type PlaceKind } from './place-name';
 
 export type RegionSample = { width: number; height: number; signs: Int8Array };
 export type PlaceLabel = {
@@ -37,11 +33,7 @@ type Placement = {
   route: Pose[];
 };
 type Track = {
-  id: number; stem: string; genome: PlaceGenome; reserveGenome: PlaceGenome;
-  suffix: string; lineage: number;
-  pendingGenome: PlaceGenome | null; nameAnchor: Uint8Array | null;
-  nameStreak: number; lastNameChange: number; mutationSerial: number;
-  heatDose: number; coldDose: number; heatHoldSeconds: number; heatPulseReady: boolean;
+  id: number; stem: string; name: NameEvolution; lineage: number;
   kind: PlaceKind; text: string; area: number;
   stability: number; agreement: number; missing: number; confirmed: boolean; present: boolean;
   center: Point; bounds: Component['bounds']; lastMask: Uint8Array | null;
@@ -50,18 +42,12 @@ type Track = {
 };
 
 const STABILITY_RESPONSE = 0.7;
-const NAME_COOLDOWN_SECONDS = 5;
-const NAME_EQUILIBRIUM_TEMPERATURE = 2.27;
-const NAME_THERMAL_SPAN = 0.2;
-const NAME_THERMAL_DOSE = 3;
-const HEAT_PULSE_SECONDS = 0.75;
-const SHAPE_MUTATION_DISTANCE = 0.24;
-const SHAPE_MUTATION_STREAK = 3;
+// Identity memory is independent of the genome's inherited expression cooldown.
+const IDENTITY_MEMORY_SECONDS = 5;
+const DEFAULT_TEMPERATURE = 2.27;
 const MIN_REGION_FRACTION = 0.0025;
 const MIN_ISLAND_FRACTION = 0.004;
 const LARGE_FRACTION = 0.055;
-const ONE_SYLLABLE_FRACTION = 0.012;
-const TWO_SYLLABLE_FRACTION = 0.03;
 const MAX_LAKE_SIDE_FRACTION = 1 / 2;
 const MAX_TRACKS = 48;
 const TEXT_HEIGHT_EM = 1.35;
@@ -90,24 +76,8 @@ const clamp = (value: number, low: number, high: number): number => Math.max(low
 const ease = (current: number, target: number, seconds: number, response: number): number =>
   current + (target - current) * (1 - Math.exp(-seconds / response));
 const isLand = (kind: PlaceKind): boolean => kind === 'island' || kind === 'continent';
-const nameSyllables = (area: number, totalCells: number): 1 | 2 | 3 => {
-  const fraction = area / totalCells;
-  return fraction < ONE_SYLLABLE_FRACTION ? 1
-    : fraction < TWO_SYLLABLE_FRACTION ? 2 : 3;
-};
 const trackingOf = (font: number): number => font * TRACKING_EM;
 const lerp = (from: number, to: number, t: number): number => from + (to - from) * t;
-// For similarly shaped regions, coast length per cell falls as 1/sqrt(area).
-// The continent threshold is the neutral size; smaller places evolve faster.
-export const nameMutationMobility = (area: number, totalCells: number): number =>
-  Math.sqrt(LARGE_FRACTION * Math.max(1, totalCells) / Math.max(1, area));
-const mutationContinuation = (base: number, mobility: number): number =>
-  1 - (1 - base) ** Math.sqrt(mobility);
-export const nameThermalRates = (temperature: number): { heat: number; cold: number } => ({
-  // Critical fluctuations make even a small change around 2.27 noticeable.
-  heat: Math.sqrt(clamp((temperature - NAME_EQUILIBRIUM_TEMPERATURE) / NAME_THERMAL_SPAN, 0, 1)),
-  cold: Math.sqrt(clamp((NAME_EQUILIBRIUM_TEMPERATURE - temperature) / NAME_THERMAL_SPAN, 0, 1)),
-});
 const axisDistance = (a: number, b: number): number => {
   const difference = Math.abs(a - b) % 180;
   return Math.min(difference, 180 - difference);
@@ -149,21 +119,12 @@ export class PlaceTracker {
   }
 
   advance(
-    seconds: number, mode: LabelMode, viewport: { width: number; height: number }, heating = false,
+    seconds: number, mode: LabelMode, viewport: { width: number; height: number },
   ): PlaceLabel[] {
     this.applyViewport(viewport);
     const dt = clamp(seconds, 0, 0.5);
     if (mode !== 'map') this.synced = false;
     for (const track of this.tracks.values()) {
-      if (mode !== 'map' || !track.present || !track.confirmed) {
-        track.heatHoldSeconds = 0;
-        track.heatPulseReady = false;
-      } else if (heating && !track.heatPulseReady) {
-        track.heatHoldSeconds += dt * nameMutationMobility(track.area, this.width * this.height);
-        if (track.heatHoldSeconds >= HEAT_PULSE_SECONDS) track.heatPulseReady = true;
-      } else if (!heating && !track.heatPulseReady) {
-        track.heatHoldSeconds = 0;
-      }
       const observed = mode === 'map' && track.confirmed && track.missing === 0;
       track.agreement = ease(track.agreement, observed ? 1 : 0, dt, STABILITY_RESPONSE);
       track.stability = ease(track.stability, observed ? track.agreement : 0, dt, STABILITY_RESPONSE);
@@ -183,12 +144,11 @@ export class PlaceTracker {
     return labels;
   }
 
-  ingest(sample: RegionSample, temperature = NAME_EQUILIBRIUM_TEMPERATURE): void {
+  ingest(sample: RegionSample, temperature = DEFAULT_TEMPERATURE): void {
     if (sample.width < 2 || sample.height < 2 || sample.signs.length !== sample.width * sample.height) return;
     const now = performance.now() / 1000;
     const gap = this.lastIngest < 0 ? 0 : Math.min(2, now - this.lastIngest);
     this.lastIngest = now;
-    const { heat, cold } = nameThermalRates(temperature);
     for (const track of this.tracks.values()) track.present = false;
     if (sample.width !== this.width || sample.height !== this.height) {
       this.owners = this.regrid(this.owners, this.width, this.height, sample.width, sample.height);
@@ -196,7 +156,6 @@ export class PlaceTracker {
       for (const track of this.tracks.values()) {
         if (track.soft) track.soft = this.regridFloat(track.soft, this.width, this.height, sample.width, sample.height);
         if (track.lastMask) track.lastMask = this.regrid(track.lastMask, this.width, this.height, sample.width, sample.height);
-        if (track.nameAnchor) track.nameAnchor = this.regrid(track.nameAnchor, this.width, this.height, sample.width, sample.height);
         const bodies = track.placement ? [track.placement, ...track.ghosts] : track.ghosts;
         for (const placement of bodies) {
           const shared = placement.mask === placement.regionMask;
@@ -256,7 +215,7 @@ export class PlaceTracker {
     // map cannot represent a region during a brief disappearance or merge.
     const remembered: Offer[] = [];
     for (const track of this.tracks.values()) {
-      if (matchedTracks.has(track.id) || !track.lastMask || track.missing >= NAME_COOLDOWN_SECONDS) continue;
+      if (matchedTracks.has(track.id) || !track.lastMask || track.missing >= IDENTITY_MEMORY_SECONDS) continue;
       for (let i = 0; i < places.length; i += 1) {
         if (matchedRegions.has(i) || isLand(track.kind) !== (places[i].sign > 0)) continue;
         const bounds = places[i].bounds;
@@ -272,7 +231,7 @@ export class PlaceTracker {
     // assigned. A distinct far region still receives a new identity.
     const nearby: Offer[] = [];
     for (const track of this.tracks.values()) {
-      if (matchedTracks.has(track.id) || track.missing >= NAME_COOLDOWN_SECONDS) continue;
+      if (matchedTracks.has(track.id) || track.missing >= IDENTITY_MEMORY_SECONDS) continue;
       for (let i = 0; i < places.length; i += 1) {
         const region = places[i];
         if (matchedRegions.has(i) || isLand(track.kind) !== (region.sign > 0)) continue;
@@ -296,6 +255,9 @@ export class PlaceTracker {
       }
       if (descendants > 1) splitParents.add(track.id);
     }
+    // Snapshot all parental DNA before constructing any descendant: inheritance
+    // must not depend on which region happens to be visited first.
+    const parents = new Map([...this.tracks].map(([id, track]) => [id, track.name.hereditary]));
     for (let i = 0; i < places.length; i += 1) {
       if (matchedRegions.has(i)) continue;
       const region = places[i];
@@ -306,33 +268,20 @@ export class PlaceTracker {
         .sort((a, b) => b[1] - a[1])
         .map(([id]) => this.tracks.get(id))
         .find((track): track is Track => track !== undefined);
-      const mobility = nameMutationMobility(region.area, sample.signs.length);
-      const syllables = nameSyllables(region.area, sample.signs.length);
-      const shortSyllables = syllables === 3 ? null : syllables;
-      const mutationStrength = ancestor
-        ? mutationMagnitude(Math.random,
-          mutationContinuation(0.28 + 0.35 * heat - 0.2 * cold, mobility)) : 0;
-      const inherited = ancestor && shortSyllables && ancestor.genome.syllables.length > shortSyllables
-        ? shortenPlaceGenome(ancestor.genome, shortSyllables,
-          this.nameSeed(region, ancestor.id), this.usedStems)
-        : ancestor?.genome;
-      let genome = ancestor
-        ? mutatePlaceGenome(inherited ?? ancestor.genome, this.nameSeed(region, ancestor.id), this.usedStems,
-          mutationStrength)
-        : createPlaceGenome(Math.random, this.usedStems, syllables);
-      if (this.usedStems.has(placeStem(genome))) {
-        genome = createPlaceGenome(Math.random, this.usedStems, syllables);
-      }
-      const stem = placeStem(genome);
-      this.usedStems.add(stem);
-      const suffix = syllables < 3 ? '' : ancestor && mutationStrength < 3
-        ? ancestor.suffix : placeLabel(region.kind, stem).slice(stem.length);
-      const text = `${stem.charAt(0).toUpperCase()}${stem.slice(1)}${suffix}`;
       const id = this.nextTrackId++;
+      const siblings = ancestor ? places.filter((place, index) =>
+        (contributions[index].get(ancestor.id) ?? 0) >= place.area * 0.5)
+        .sort((a, b) => a.center.x - b.center.x || a.center.y - b.center.y) : [];
+      const name = new NameEvolution({
+        areaFraction: region.area / sample.signs.length, now, banned: this.usedStems,
+        parent: ancestor ? parents.get(ancestor.id)?.genes : undefined,
+        fragment: siblings.indexOf(region),
+      });
+      const stem = placeStem(name.genome);
+      this.usedStems.add(stem);
+      const text = this.nameText(name.genome);
       const track: Track = {
-        id, stem, genome, reserveGenome: genome, suffix, lineage: ancestor?.lineage ?? id,
-        pendingGenome: null, nameAnchor: null, nameStreak: 0, lastNameChange: now, mutationSerial: 0,
-        heatDose: 0, coldDose: 0, heatHoldSeconds: 0, heatPulseReady: false,
+        id, stem, name, lineage: ancestor?.lineage ?? id,
         kind: region.kind, text,
         area: region.area, stability: 0.15, agreement: 1, missing: 0, confirmed: true, present: false,
         center: region.center, bounds: region.bounds, lastMask: null,
@@ -347,7 +296,7 @@ export class PlaceTracker {
         .filter(([id, overlap]) => {
           const source = this.tracks.get(id);
           if (!source || isLand(source.kind) !== (region.sign > 0)) return false;
-          const genes = source.genome.syllables.length * 2 + 1;
+          const genes = source.name.genome.syllables.length * 2 + 1;
           return overlap / region.area >= 0.5 / genes;
         })
         .map(([id, overlap]) => ({ track: this.tracks.get(id) as Track, weight: overlap }))
@@ -355,19 +304,9 @@ export class PlaceTracker {
           || Number(b.track === track) - Number(a.track === track)
           || a.track.id - b.track.id);
       if (ancestors.length > 1) {
-        const sameLineage = ancestors.every((entry) => entry.track.lineage === ancestors[0].track.lineage);
-        const target = sameLineage
-          ? [...ancestors].sort((a, b) => a.track.id - b.track.id)[0].track.genome
-          : recombinePlaceGenomes(ancestors.map(({ track: source, weight }) =>
-            ({ genome: source.genome, weight })), nameSyllables(region.area, sample.signs.length));
-        if (placeStem(target) !== track.stem) track.pendingGenome = target;
-        track.lastNameChange = now;
-        track.nameStreak = 0;
-        track.nameAnchor = null;
-      } else if (splitParents.has(track.id)) {
-        track.lastNameChange = now;
-        track.nameStreak = 0;
-        track.nameAnchor = null;
+        track.name.recombine(ancestors.map(({ track: source, weight }) => ({
+          ...parents.get(source.id)!, weight,
+        })), region.area / sample.signs.length);
       }
     }
     const nextOwners = new Uint16Array(sample.signs.length);
@@ -377,7 +316,7 @@ export class PlaceTracker {
         const continuity = overlap / Math.min(track.area, region.area);
         track.agreement = Math.min(track.agreement, 0.65 + 0.35 * continuity);
       }
-      // Keep the region identity; evolveName adjusts expressed name length
+      // Keep the region identity; its genome adjusts expressed name length
       // through the cooldown and the placement's geometric fit.
       track.area = region.area;
       track.center = region.center;
@@ -391,7 +330,7 @@ export class PlaceTracker {
       if (assignments.some((entry) => entry.track === track)) continue;
       track.missing += gap;
       track.confirmed = false;
-      if (track.missing > NAME_COOLDOWN_SECONDS) {
+      if (track.missing > IDENTITY_MEMORY_SECONDS) {
         this.tracks.delete(track.id);
         this.usedStems.delete(track.stem);
       }
@@ -400,12 +339,13 @@ export class PlaceTracker {
       this.synced = true;
       return;
     }
-    const genomes = new Map([...this.tracks].map(([id, track]) => [id, track.genome]));
     for (const { track, region } of assignments) {
       const mask = this.allowedMask(region);
-      const donor = cold > 0 ? this.coldDonor(track, cold) : null;
-      this.evolveName(track, region, mask, now, gap, heat, cold,
-        donor ? genomes.get(donor.id) ?? null : null);
+      const proposal = track.name.propose({
+        areaFraction: region.area / sample.signs.length, temperature, elapsed: gap,
+        now, banned: this.usedStems,
+      });
+      if (proposal) this.rename(track, proposal, mask, now);
       track.lastMask = mask;
       this.remember(mask);
       this.smooth(track, mask, gap);
@@ -414,164 +354,26 @@ export class PlaceTracker {
     this.synced = true;
   }
 
-  private nameSeed(region: Component, lineage: number): number {
-    return Math.floor(region.center.x * 8191 + region.center.y * 16381
-      + region.area * 17 + lineage * 131);
-  }
-
-  private maskDistance(first: Uint8Array, second: Uint8Array): number {
-    let union = 0;
-    let intersection = 0;
-    for (let index = 0; index < second.length; index += 1) {
-      union += first[index] | second[index];
-      intersection += first[index] & second[index];
-    }
-    return union > 0 ? 1 - intersection / union : 0;
-  }
-
-  private rename(
-    track: Track, genome: PlaceGenome, mask: Uint8Array, now: number, suffix = track.suffix,
-  ): boolean {
+  private nameText(genome: PlaceGenome): string {
     const stem = placeStem(genome);
-    if ((stem === track.stem && suffix === track.suffix)
-      || (stem !== track.stem && this.usedStems.has(stem))) return false;
-    const text = `${stem.charAt(0).toUpperCase()}${stem.slice(1)}${suffix}`;
+    return stem.charAt(0).toUpperCase() + stem.slice(1);
+  }
+
+  private rename(track: Track, proposal: NameProposal, mask: Uint8Array, now: number): boolean {
+    const stem = placeStem(proposal.genome);
+    if (now < track.name.nextChangeAt || (stem !== track.stem && this.usedStems.has(stem))) return false;
+    const text = this.nameText(proposal.genome);
     const placement = track.placement;
-    if (placement?.alive && !this.fitsPose(placement.mask, text, this.snapshot(placement))) return false;
+    // Expression waits for the existing seat to accommodate it. Updating text
+    // never resets opacity, velocity or the placement identity.
+    if (placement?.alive && (!this.fitsPose(mask, text, this.snapshot(placement))
+      || !this.fitsPose(placement.mask, text, this.snapshot(placement)))) return false;
     this.usedStems.delete(track.stem);
     this.usedStems.add(stem);
-    track.genome = genome;
-    track.reserveGenome = genome;
+    track.name.commit(proposal, now);
     track.stem = stem;
-    track.suffix = suffix;
     track.text = text;
-    track.lastNameChange = now;
-    track.nameAnchor = mask.slice();
-    track.nameStreak = 0;
     return true;
-  }
-
-  private coldDonor(track: Track, cold: number): Track | null {
-    const radius = Math.sqrt(track.area / Math.PI);
-    let best: Track | null = null;
-    let nearest = Infinity;
-    for (const candidate of this.tracks.values()) {
-      if (candidate.id === track.id || !candidate.present || !candidate.confirmed
-        || isLand(candidate.kind) !== isLand(track.kind)
-        || candidate.area < track.area
-        || (candidate.area === track.area && candidate.id > track.id)) continue;
-      const distance = Math.hypot((candidate.center.x - track.center.x) * this.width,
-        (candidate.center.y - track.center.y) * this.height);
-      const separation = distance / (radius + Math.sqrt(candidate.area / Math.PI));
-      // Cold widens the range over which an older/larger name can spread.
-      if (separation > 1 + 2 * cold || separation >= nearest) continue;
-      best = candidate;
-      nearest = separation;
-    }
-    return best;
-  }
-
-  private evolveName(
-    track: Track, region: Component, mask: Uint8Array, now: number, gap: number,
-    heat: number, cold: number, donor: PlaceGenome | null,
-  ): void {
-    if (!track.nameAnchor || track.nameAnchor.length !== mask.length) track.nameAnchor = mask.slice();
-    const mobility = nameMutationMobility(track.area, mask.length);
-    const syllables = nameSyllables(track.area, mask.length);
-    const shortSyllables = syllables === 3 ? null : syllables;
-    if (track.pendingGenome && track.pendingGenome.syllables.length > syllables) {
-      track.pendingGenome = null;
-    }
-    const currentPose = track.placement?.alive ? this.snapshot(track.placement) : null;
-    const tooLongForCurrentSeat = currentPose !== null
-      && !this.fitsPose(mask, track.text, currentPose);
-    if (shortSyllables && (track.genome.syllables.length > shortSyllables || track.suffix !== '')
-      && (now - track.lastNameChange >= NAME_COOLDOWN_SECONDS || tooLongForCurrentSeat)) {
-      const previous = track.genome;
-      const reserve = track.reserveGenome;
-      const short = shortenPlaceGenome(track.genome, shortSyllables,
-        this.nameSeed(region, track.lineage), this.usedStems);
-      if (this.rename(track, short, mask, now, '')) {
-        track.reserveGenome = reserve.syllables.length >= previous.syllables.length ? reserve : previous;
-        track.pendingGenome = null;
-        return;
-      }
-    }
-    track.heatDose = heat > 0 ? Math.min(NAME_THERMAL_DOSE, track.heatDose + heat * gap * mobility) : 0;
-    track.coldDose = cold > 0 ? Math.min(NAME_THERMAL_DOSE, track.coldDose + cold * gap * mobility) : 0;
-    if (track.pendingGenome) {
-      if (now - track.lastNameChange < NAME_COOLDOWN_SECONDS / Math.min(1, mobility)) return;
-      const pending = track.pendingGenome;
-      const next = nextPlaceGenomeStep(track.genome, pending, this.usedStems);
-      // A disappearing donor may still reserve the target spelling during its
-      // own five-second grace period. Keep that inheritance until it is free.
-      if (!next) {
-        const holder = [...this.tracks.values()].find((other) =>
-          other.id !== track.id && other.stem === placeStem(pending));
-        if (!holder || holder.present) track.pendingGenome = null;
-      }
-      else {
-        const reserve = track.reserveGenome;
-        if (this.rename(track, next, mask, now,
-          next.syllables.length === 3
-            ? track.suffix || placeLabel(track.kind, placeStem(next)).slice(placeStem(next).length) : '')) {
-          if (reserve.syllables.length > next.syllables.length
-            && placeStem(reserve).startsWith(placeStem(next))) track.reserveGenome = reserve;
-          if (placeStem(track.genome) === placeStem(pending)) track.pendingGenome = null;
-        }
-      }
-      return;
-    }
-    if (track.genome.syllables.length < syllables
-      && now - track.lastNameChange >= NAME_COOLDOWN_SECONDS) {
-      const reserve = track.reserveGenome;
-      const grown = extendPlaceGenome(track.genome,
-        this.nameSeed(region, track.lineage) + track.mutationSerial * 31, this.usedStems, reserve);
-      if (grown) {
-        const grownStem = placeStem(grown);
-        const ending = grown.syllables.length === 3
-          ? placeLabel(track.kind, grownStem).slice(grownStem.length) : '';
-        if (this.rename(track, grown, mask, now, ending)) {
-          if (reserve.syllables.length > grown.syllables.length
-            && placeStem(reserve).startsWith(placeStem(grown))) track.reserveGenome = reserve;
-          track.mutationSerial += 1;
-          return;
-        }
-        track.pendingGenome = grown;
-        return;
-      }
-    }
-    if (cold > 0 && !track.heatPulseReady) {
-      // Cooling favours local inheritance over independent shape mutations.
-      track.nameAnchor = mask.slice();
-      track.nameStreak = 0;
-      if (track.coldDose < NAME_THERMAL_DOSE
-        || now - track.lastNameChange < NAME_COOLDOWN_SECONDS || !donor) return;
-      const borrowed = borrowPlaceGenomeGene(track.genome, donor,
-        this.nameSeed(region, track.lineage) + track.mutationSerial * 31, this.usedStems);
-      track.coldDose = 0;
-      if (borrowed && this.rename(track, borrowed, mask, now)) track.mutationSerial += 1;
-      return;
-    }
-    if (this.maskDistance(track.nameAnchor, mask) > SHAPE_MUTATION_DISTANCE) track.nameStreak += mobility;
-    else track.nameStreak = 0;
-    if ((track.nameStreak < SHAPE_MUTATION_STREAK && track.heatDose < NAME_THERMAL_DOSE
-      && !track.heatPulseReady)
-      || now - track.lastNameChange < NAME_COOLDOWN_SECONDS) return;
-    const strength = mutationMagnitude(Math.random,
-      mutationContinuation(track.heatPulseReady ? 0.55 : 0.28 + 0.35 * heat, mobility),
-      track.heatPulseReady ? 2 : 1);
-    const seed = this.nameSeed(region, track.lineage) + track.mutationSerial * 31;
-    // Search only among same-length spellings that fit the current seat.
-    for (let attempt = 0; attempt < track.genome.syllables.length * 2 + 1; attempt += 1) {
-      const mutant = mutatePlaceGenome(track.genome, seed + attempt, this.usedStems, strength);
-      if (!this.rename(track, mutant, mask, now)) continue;
-      track.mutationSerial += 1;
-      track.heatDose = 0;
-      track.heatHoldSeconds = 0;
-      track.heatPulseReady = false;
-      break;
-    }
   }
 
   private aim(track: Track, mask: Uint8Array, elapsed: number): void {
@@ -582,12 +384,7 @@ export class PlaceTracker {
       track.soft ?? Float32Array.from(mask), track.styleFont, track.area);
     const alive = track.placement?.alive ? track.placement : null;
     const prefer = alive?.angle ?? 0;
-    const pendingStem = track.pendingGenome ? placeStem(track.pendingGenome) : null;
-    const pendingText = pendingStem && track.pendingGenome
-      ? `${pendingStem.charAt(0).toUpperCase()}${pendingStem.slice(1)}${
-        track.pendingGenome.syllables.length === 3
-          ? track.suffix || placeLabel(track.kind, pendingStem).slice(pendingStem.length) : ''}`
-      : null;
+    const pendingText = track.name.pending ? this.nameText(track.name.pending.genome) : null;
     // Make room for a longer inherited name while the old inscription is
     // still visible. Its font and angle travel through the normal spring path.
     const futureText = pendingText && this.boxWidth(pendingText, MIN_FONT, trackingOf(MIN_FONT))
@@ -620,7 +417,12 @@ export class PlaceTracker {
       return seats;
     };
     let seats = findSeats(futureText);
-    if (seats.length === 0 && futureText !== track.text) seats = findSeats(track.text);
+    if (seats.length === 0 && futureText !== track.text) {
+      // A mutation that cannot be expressed anywhere must not block later
+      // evolution. Inherited DNA and growth still wait for enough room.
+      if (track.name.pending) track.name.reject(track.name.pending);
+      seats = findSeats(track.text);
+    }
     if (seats.length === 0) {
       if (alive) this.release(track);
       return;

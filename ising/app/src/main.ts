@@ -7,6 +7,7 @@ import {
   type InkState, type InkTransition, type LuminanceField,
 } from './label-ink';
 import { labelPositions, PlaceTracker, type LabelMode, type PlaceLabel } from './place-engine';
+import { advanceLabelText, labelTextFrame, type LabelTextTransition } from './label-text';
 import { advanceHeldTemperature, temperaturePaddleProgress } from './temperature-control';
 
 const CRITICAL_TEMPERATURE = 2 / Math.log(1 + Math.sqrt(2));
@@ -55,6 +56,9 @@ const scaleCopy = [
 ];
 
 type Point = { x: number; y: number };
+type PlaceLabelNode = {
+  node: HTMLSpanElement; current: HTMLSpanElement; previous: HTMLSpanElement | null;
+};
 
 async function main(): Promise<void> {
   const gpu = await requestGpu();
@@ -96,7 +100,9 @@ async function main(): Promise<void> {
   let regionInFlight = false;
   let lastRegionRequest = 0;
   const places = new PlaceTracker();
-  const labelNodes = new Map<number, HTMLSpanElement[]>();
+  const labelNodes = new Map<number, PlaceLabelNode[]>();
+  const labelTextMotion = new Map<number, LabelTextTransition>();
+  const reducedTextMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const labelInk = new Map<number, InkState>();
   const labelInkMotion = new Map<number, InkTransition>();
   const labelInkOpacity = new Map<number, number>();
@@ -221,6 +227,7 @@ async function main(): Promise<void> {
     labelInkMotion.clear();
     labelInkOpacity.clear();
     labelLightVersions.clear();
+    labelTextMotion.clear();
     syncPlaceLabels([], 0);
   };
 
@@ -241,6 +248,9 @@ async function main(): Promise<void> {
       const opacity = advanceInkOpacity(labelInkOpacity.get(label.id), labelInk.get(label.id)?.opacity ?? 1, seconds);
       labelInkOpacity.set(label.id, opacity);
       const spots = labelPositions(label);
+      const textMotion = advanceLabelText(labelTextMotion.get(label.id), label.text, seconds, reducedTextMotion.matches);
+      labelTextMotion.set(label.id, textMotion);
+      const textFrame = labelTextFrame(textMotion);
       let nodes = labelNodes.get(label.id);
       if (!nodes) {
         nodes = [];
@@ -249,15 +259,33 @@ async function main(): Promise<void> {
       while (nodes.length < spots.length) {
         const node = document.createElement('span');
         node.className = 'place-label';
+        const current = document.createElement('span');
+        current.className = 'place-label-text';
+        node.append(current);
         placeLabels.append(node);
-        nodes.push(node);
+        nodes.push({ node, current, previous: null });
       }
-      while (nodes.length > spots.length) nodes.pop()?.remove();
+      while (nodes.length > spots.length) nodes.pop()?.node.remove();
       for (let index = 0; index < spots.length; index += 1) {
-        const node = nodes[index];
+        const rendering = nodes[index];
+        const { node, current } = rendering;
         const spot = spots[index];
         if (node.dataset.kind !== label.kind) node.dataset.kind = label.kind;
-        if (node.textContent !== label.text) node.textContent = label.text;
+        if (current.textContent !== textFrame.current) current.textContent = textFrame.current;
+        current.style.opacity = textFrame.currentOpacity.toFixed(3);
+        if (textFrame.previous !== null) {
+          if (!rendering.previous) {
+            rendering.previous = document.createElement('span');
+            rendering.previous.className = 'place-label-text place-label-text-previous';
+            rendering.previous.setAttribute('aria-hidden', 'true');
+            node.prepend(rendering.previous);
+          }
+          if (rendering.previous.textContent !== textFrame.previous) rendering.previous.textContent = textFrame.previous;
+          rendering.previous.style.opacity = textFrame.previousOpacity.toFixed(3);
+        } else if (rendering.previous) {
+          rendering.previous.remove();
+          rendering.previous = null;
+        }
         node.style.color = color;
         node.style.opacity = (label.opacity * opacity).toFixed(3);
         node.style.fontSize = `${label.fontSize.toFixed(2)}px`;
@@ -267,8 +295,9 @@ async function main(): Promise<void> {
     }
     for (const [id, nodes] of labelNodes) {
       if (seen.has(id)) continue;
-      for (const node of nodes) node.remove();
+      for (const { node } of nodes) node.remove();
       labelNodes.delete(id);
+      labelTextMotion.delete(id);
       labelInk.delete(id);
       labelInkMotion.delete(id);
       labelInkOpacity.delete(id);
@@ -720,7 +749,7 @@ async function main(): Promise<void> {
     const labels = places.advance(Math.min(0.5, rawDelta), labelMode, {
       width: viewport.width,
       height: viewport.height,
-    }, temperatureDirection > 0);
+    });
     syncPlaceLabels(labels, rawDelta);
 
     if (renderDirty) drawNow();

@@ -54,6 +54,7 @@ input { font: inherit; }
 }
 
 .place-label {
+  display: inline-grid;
   position: absolute;
   top: 0;
   left: 0;
@@ -66,6 +67,11 @@ input { font: inherit; }
   white-space: nowrap;
   transform-origin: 0 0;
   -webkit-text-stroke: 0;
+}
+
+.place-label-text {
+  grid-area: 1 / 1;
+  place-self: center;
 }
 
 .place-label[data-kind="lake"] {
