@@ -35,7 +35,8 @@ const ingest = (tracker: PlaceTracker, rectangles: Array<[number, number, number
 };
 
 // A larger, younger continent joins an older one. The larger body keeps the
-// moving label, then inherits some sounds from the smaller body after cooldown.
+// moving label, then inherits some sounds from the smaller body more slowly
+// because the merged region is large.
 const merged = new PlaceTracker();
 merged.advance(0.016, 'map', view);
 ingest(merged, [[4, 16, 10, 26]]);
@@ -51,6 +52,10 @@ const joined = advance(merged);
 assert(joined.some((label) => label.id === younger.id && label.text === younger.text && label.opacity > 0.8),
   `larger region did not retain the moving label (${joined.map((label) => label.text)})`);
 ingest(merged, [[4, 16, 10, 26], [16, 28, 17, 19], [28, 44, 8, 28]], 5.1);
+const stillDominant = advance(merged);
+assert(stillDominant.some((label) => label.id === younger.id && label.text === younger.text),
+  'large merged region changed its name at the minimum cooldown');
+ingest(merged, [[4, 16, 10, 26], [16, 28, 17, 19], [28, 44, 8, 28]], 7.1);
 const inherited = advance(merged);
 assert(inherited.some((label) => label.id === younger.id && label.text !== younger.text),
   `merged name did not inherit from both parents (${inherited.map((label) => label.text)})`);

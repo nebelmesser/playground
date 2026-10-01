@@ -62,6 +62,7 @@ const waterMap = (box: [number, number, number, number], open = false) => {
   return { width: waterWidth, height: waterHeight, signs };
 };
 type TrackProbe = { tracks: Map<number, { kind: string;
+  genome: { syllables: unknown[] }; suffix: string;
   placement: { mask: Uint8Array; regionMask: Uint8Array; route: unknown[] } | null }> };
 const waterWithIsland = (islandSize: number) => {
   const map = waterMap([18, 36, 16, 29]);
@@ -87,21 +88,99 @@ lake.advance(0.016, 'map', waterView);
 lake.ingest(waterMap([18, 30, 16, 28]));
 const first = settle(lake, waterView).find((label) => label.kind === 'lake');
 assert(first !== undefined, 'small enclosed water did not receive a label');
+assert([...(lake as unknown as TrackProbe).tracks.values()].some((track) =>
+  track.kind === 'lake' && track.genome.syllables.length === 2),
+  'medium lake did not receive a two-syllable name');
 
-// A water body becomes too large only if both spans exceed a quarter of the
+// These footprints were below the old area cutoffs. A short inscription must
+// actually become visible; classification alone is not enough.
+const tinyLake = new PlaceTracker();
+tinyLake.advance(0.016, 'map', waterView);
+tinyLake.ingest(waterMap([18, 23, 16, 21])); // 25 cells; old cutoff was 32.
+const tinyLakeLabel = settle(tinyLake, waterView).find((label) => label.kind === 'lake');
+assert(tinyLakeLabel !== undefined && tinyLakeLabel.opacity > 0.8,
+  'newly admitted 5×5 lake did not show a label');
+assert([...(tinyLake as unknown as TrackProbe).tracks.values()].some((track) =>
+  track.kind === 'lake' && track.genome.syllables.length === 1 && track.suffix === ''),
+  'tiny lake did not receive a one-syllable name');
+for (let trial = 0; trial < 12; trial += 1) {
+  const candidate = new PlaceTracker();
+  candidate.advance(0.016, 'map', waterView);
+  candidate.ingest(waterMap([18, 23, 16, 21]));
+  const label = settle(candidate, waterView).find((entry) => entry.kind === 'lake');
+  assert(label !== undefined && label.opacity > 0.8,
+    `one-syllable lake variant ${trial} failed to fit its 5×5 shore`);
+}
+
+// If the old text no longer fits after a shrink, shorten it at once and keep
+// the same moving inscription instead of fading it out and respawning nearby.
+const shrinkingLake = new PlaceTracker();
+shrinkingLake.advance(0.016, 'map', waterView);
+shrinkingLake.ingest(waterMap([18, 30, 16, 28]));
+const beforeShrink = settle(shrinkingLake, waterView).find((label) => label.kind === 'lake');
+assert(beforeShrink !== undefined, 'shrinking lake setup had no label');
+const shrinkingTrack = [...(shrinkingLake as unknown as TrackProbe).tracks.values()]
+  .find((track) => track.kind === 'lake');
+assert(shrinkingTrack !== undefined, 'shrinking lake lost its tracked identity');
+shrinkingLake.ingest(waterMap([21, 27, 19, 24]));
+const afterShrink = settle(shrinkingLake, waterView).find((label) => label.kind === 'lake');
+assert([...((shrinkingLake as unknown as TrackProbe).tracks.values())].includes(shrinkingTrack)
+  && shrinkingTrack.genome.syllables.length === 1 && shrinkingTrack.suffix === ''
+  && afterShrink !== undefined && afterShrink.id === beforeShrink.id
+  && afterShrink.text.length < beforeShrink.text.length && afterShrink.opacity > 0.8,
+  'shrinking lake failed to keep and shorten its own name');
+
+const tinyIslandSigns = new Int8Array(waterWidth * waterHeight).fill(-1);
+for (let y = 30; y < 37; y += 1) {
+  for (let x = 40; x < 47; x += 1) tinyIslandSigns[x + y * waterWidth] = 1;
+}
+const tinyIsland = new PlaceTracker();
+tinyIsland.advance(0.016, 'map', waterView);
+tinyIsland.ingest({ width: waterWidth, height: waterHeight, signs: tinyIslandSigns });
+const tinyIslandLabel = settle(tinyIsland, waterView).find((label) => label.kind === 'island');
+assert(tinyIslandLabel !== undefined && tinyIslandLabel.opacity > 0.8,
+  'newly admitted 7×7 island did not show a label');
+assert([...(tinyIsland as unknown as TrackProbe).tracks.values()].some((track) =>
+  track.kind === 'island' && track.genome.syllables.length === 1 && track.suffix === ''),
+  'tiny island did not receive a one-syllable name');
+
+const mediumIslandSigns = new Int8Array(waterWidth * waterHeight).fill(-1);
+for (let y = 30; y < 42; y += 1) {
+  for (let x = 40; x < 52; x += 1) mediumIslandSigns[x + y * waterWidth] = 1;
+}
+const mediumIsland = new PlaceTracker();
+mediumIsland.advance(0.016, 'map', waterView);
+mediumIsland.ingest({ width: waterWidth, height: waterHeight, signs: mediumIslandSigns });
+assert(settle(mediumIsland, waterView).some((label) => label.kind === 'island'),
+  'medium island did not show its label');
+assert([...(mediumIsland as unknown as TrackProbe).tracks.values()].some((track) =>
+  track.kind === 'island' && track.genome.syllables.length === 2 && track.suffix === ''),
+  'medium island did not receive a two-syllable name');
+
+// A water body becomes sea only if both spans exceed half of the
 // frame. One long dimension alone still permits a named lake.
 for (const box of [
-  [18, 46, 16, 36], // 28×20: exactly one quarter in both dimensions
+  [18, 57, 12, 40], // 39×28: formerly too large, now a lake
   [18, 88, 16, 26], // 70×10: long and horizontal
   [18, 30, 16, 66], // 12×50: long and vertical
-  [18, 47, 16, 36], // 29×20: only width crosses the threshold
-  [18, 46, 16, 37], // 28×21: only height crosses the threshold
+  [18, 74, 16, 56], // 56×40: exactly half in both dimensions
+  [18, 75, 16, 56], // 57×40: only width exceeds half
+  [18, 74, 16, 57], // 56×41: only height exceeds half
 ] as [number, number, number, number][]) {
   assert(classifiedAsLake(box), `lake with at most one oversized span lost its name (${box})`);
 }
-assert(!classifiedAsLake([18, 47, 16, 37]),
-  'lake larger than a quarter in both dimensions kept its name');
-for (const box of [[18, 88, 16, 26], [18, 30, 16, 66]] as [number, number, number, number][]) {
+const broadSea = waterMap([18, 75, 16, 57]); // 57×41: both exceed half.
+const broadSeaTracker = new PlaceTracker();
+broadSeaTracker.advance(0.016, 'map', waterView);
+broadSeaTracker.ingest(broadSea);
+assert(![...(broadSeaTracker as unknown as TrackProbe).tracks.values()].some((track) => track.kind === 'lake'),
+  'water larger than half the frame in both dimensions kept its lake name');
+const broadSeaComponents = (broadSeaTracker as unknown as { components(signs: Int8Array):
+  Array<{ area: number; role: string }> }).components(broadSea.signs);
+assert(broadSeaComponents.some((component) => component.area === 57 * 41 && component.role === 'sea'),
+  'water larger than half the frame in both dimensions was not classified as sea');
+for (const box of [[18, 57, 12, 40], [18, 88, 16, 26], [18, 30, 16, 66],
+  [18, 74, 16, 56], [18, 75, 16, 56], [18, 74, 16, 57]] as [number, number, number, number][]) {
   const tracker = new PlaceTracker();
   tracker.advance(0.016, 'map', waterView);
   tracker.ingest(waterMap(box));
@@ -135,9 +214,9 @@ const lakeTrack = [...(lake as unknown as TrackProbe).tracks.values()].find((tra
 assert(lakeTrack?.placement?.mask[18 + 20 * waterWidth] === 0,
   'the transition corridor retained a shoreline from two samples ago');
 
-// An enlarged lake is no longer a small cartographic object. Its existing
-// inscription fades promptly instead of staying visible for the name cooldown.
-lake.ingest(waterMap([18, 57, 12, 40]));
+// Once both dimensions pass half of the frame, its existing inscription
+// fades promptly instead of staying visible for the name cooldown.
+lake.ingest(broadSea);
 let afterGrowth: PlaceLabel[] = [];
 for (let frame = 0; frame < 45; frame += 1) afterGrowth = lake.advance(1 / 30, 'map', waterView);
 assert(afterGrowth.every((label) => label.kind !== 'lake' || label.opacity < 0.1),
@@ -149,7 +228,7 @@ open.advance(0.016, 'map', waterView);
 open.ingest(waterMap([18, 30, 16, 28], true));
 assert(settle(open, waterView).every((label) => label.kind !== 'lake'),
   'sea inlet received a lake name');
-console.log('lake geometry', { acceptedBoxes: '28×20 / 70×10 / 12×50 / 29×20 / 28×21',
-  rejectedBox: '29×21',
+console.log('lake geometry', { acceptedBoxes: '39×28 / 70×10 / 12×50 / 56×40 / 57×40 / 56×41',
+  rejectedBox: '57×41',
   acceptedShore: '62/74', rejectedShore: '62/78' });
 console.log('ok');

@@ -1,4 +1,4 @@
-import { nameThermalRates, PlaceTracker } from '../src/place-engine.ts';
+import { nameMutationMobility, nameThermalRates, PlaceTracker } from '../src/place-engine.ts';
 import { borrowPlaceGenomeGene, placeStem, type PlaceGenome } from '../src/place-name.ts';
 import { advanceHeldTemperature } from '../src/temperature-control.ts';
 
@@ -11,7 +11,11 @@ const loci = (genome: PlaceGenome): string[] => [
 const resemblance = (a: PlaceGenome, b: PlaceGenome): number => {
   const left = loci(a);
   const right = loci(b);
-  return left.reduce((count, allele, index) => count + Number(allele === right[index]), 0);
+  return left.reduce((count, allele, index) => {
+    const source = index === left.length - 1 ? right.length - 1
+      : Math.min(Math.floor(index / 2), b.syllables.length - 1) * 2 + index % 2;
+    return count + Number(allele === right[source]);
+  }, 0);
 };
 const rates = [2.12, 2.22, 2.27, 2.29, 2.32, 2.42].map(nameThermalRates);
 assert(rates[2].heat === 0 && rates[2].cold === 0, 'default temperature drives spontaneous name changes');
@@ -19,6 +23,9 @@ assert(rates[0].cold > rates[1].cold && rates[1].cold > 0,
   'cooling does not increase linguistic assimilation');
 assert(rates[5].heat > rates[4].heat && rates[4].heat > rates[3].heat && rates[3].heat > 0,
   'small temperature increases do not raise the mutation rate');
+assert(nameMutationMobility(40, 3200) > nameMutationMobility(192, 3200)
+  && nameMutationMobility(192, 3200) > nameMutationMobility(1118, 3200),
+  'name mutation pressure does not decrease with area');
 
 const donor: PlaceGenome = {
   syllables: [{ onset: 's', vowel: 'o' }, { onset: 'r', vowel: 'a' }], coda: 'n',
@@ -87,14 +94,16 @@ const run = (tracker: PlaceTracker, field: ReturnType<typeof sample>, temperatur
 };
 
 const largeIsland: Rect[] = [[10, 53, 7, 33]];
+const mediumIsland: Rect[] = [[20, 36, 14, 26]];
+const smallIsland: Rect[] = [[20, 32, 14, 24]];
 const quiet = make(largeIsland, 2.27);
 assert(run(quiet.tracker, quiet.field, 2.27, 45) === 0,
   'unchanged region changed its name at the reference temperature');
 const barelyWarm = make(largeIsland, 2.29);
 assert(run(barelyWarm.tracker, barelyWarm.field, 2.29, 30) >= 1,
   'a small increase of 0.02 did not eventually affect stable text');
-const holdHeatOneSecond = (start: number) => {
-  const pulse = make(largeIsland, start);
+const holdHeatOneSecond = (start: number, rectangles: Rect[]) => {
+  const pulse = make(rectangles, start);
   run(pulse.tracker, pulse.field, start, 5.25);
   const before = tracksOf(pulse.tracker)[0];
   const genome = before.genome;
@@ -107,16 +116,19 @@ const holdHeatOneSecond = (start: number) => {
     if ((frame + 1) % 15 === 0) pulse.tracker.ingest(pulse.field, temperature);
   }
   const after = tracksOf(pulse.tracker)[0];
-  assert(loci(after.genome).filter((gene, index) => gene !== loci(genome)[index]).length >= 2,
-    'one-second heating did not noticeably morph the name');
   assert(after.placement?.alive && after.placement.id === placement,
     'short heating replaced the existing label instead of changing its text');
-  return temperature;
+  return { temperature,
+    changedGenes: loci(after.genome).filter((gene, index) => gene !== loci(genome)[index]).length };
 };
-const pulseTemperature = holdHeatOneSecond(2.27);
-assert(pulseTemperature < 2.39, 'one-second heating already drove the map toward chaos');
-assert(holdHeatOneSecond(1.9) < 2.1,
+const pulse = holdHeatOneSecond(2.27, mediumIsland);
+assert(pulse.temperature < 2.39, 'one-second heating already drove the map toward chaos');
+assert(pulse.changedGenes >= 2, 'one-second heating did not noticeably morph a medium name');
+const frozenPulse = holdHeatOneSecond(1.9, mediumIsland);
+assert(frozenPulse.temperature < 2.1 && frozenPulse.changedGenes >= 2,
   'short heating of a frozen map moved temperature too far');
+assert(holdHeatOneSecond(2.27, largeIsland).changedGenes === 0,
+  'a large region mutated as quickly as a medium one under a short heat pulse');
 const slightlyWarm = make(largeIsland, 2.32);
 assert(run(slightlyWarm.tracker, slightlyWarm.field, 2.32, 4.75) === 0,
   'heat bypassed the five-second name cooldown');
@@ -131,6 +143,12 @@ assert(run(interrupted.tracker, interrupted.field, 2.32, 2) === 0,
 const hot = make(largeIsland, 2.42);
 const hotChanges = run(hot.tracker, hot.field, 2.42, 39.75);
 assert(hotChanges > mildChanges, `stronger heating did not vary names more (${hotChanges} vs ${mildChanges})`);
+const smallWarm = make(smallIsland, 2.32);
+const smallChanges = run(smallWarm.tracker, smallWarm.field, 2.32, 30);
+const largeWarm = make(largeIsland, 2.32);
+const largeChanges = run(largeWarm.tracker, largeWarm.field, 2.32, 30);
+assert(smallChanges > largeChanges,
+  `larger region did not mutate less under the same heat (${smallChanges} vs ${largeChanges})`);
 
 const neighbours: Rect[] = [[3, 36, 8, 32], [40, 56, 12, 28]];
 const cooling = make(neighbours, 2.07);
@@ -144,7 +162,7 @@ run(cooling.tracker, cooling.field, 2.07, 30);
 const after = tracksOf(cooling.tracker);
 assert(after[0].stem === donorName, 'larger regional name was replaced by its smaller neighbour');
 assert(resemblance(after[1].genome, after[0].genome) > resemblanceBefore,
-  'freezing did not make nearby names more alike');
+  `freezing did not make nearby names more alike (${resemblanceBefore} -> ${resemblance(after[1].genome, after[0].genome)}, ${after[0].stem}/${after[1].stem})`);
 assert(after[0].stem !== after[1].stem, 'cold transfer created duplicate map names');
 const distant = make([[2, 17, 11, 26], [63, 78, 11, 26]], 2.07);
 const distantNames = tracksOf(distant.tracker).map((track) => track.stem).join('|');
@@ -153,6 +171,6 @@ assert(tracksOf(distant.tracker).map((track) => track.stem).join('|') === distan
   'freezing copied a name across unrelated distant regions');
 
 console.log('Temperature-driven place-name evolution passed.', {
-  mildChanges, hotChanges, resemblanceBefore,
+  mildChanges, hotChanges, smallChanges, largeChanges, resemblanceBefore,
   resemblanceAfter: resemblance(after[1].genome, after[0].genome),
 });
