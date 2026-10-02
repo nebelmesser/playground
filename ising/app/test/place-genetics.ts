@@ -160,8 +160,12 @@ assert(JSON.stringify(ab) === abSnapshot, 'chained reproduction edited an earlie
 
 // Integrating the same physical time in different partitions must not mint
 // extra mutations. Proposals are held until the renderer can commit them.
+const partitionGenes = new NameEvolution({ areaFraction: 0.04, now: 0, rng: rng(41) }).genes;
 const integrated = (steps: number): NameEvolution => {
   const evolution = new NameEvolution({ areaFraction: 0.04, now: 0, rng: rng(41) });
+  // These are two time integrations of the same individual, including its
+  // origin IDs; identical random spelling alone now creates separate founders.
+  evolution.genes = structuredClone(partitionGenes);
   for (let step = 1; step <= steps; step += 1) {
     evolution.propose({ areaFraction: 0.04, now: step * 40 / steps,
       elapsed: 40 / steps, temperature: 2.42 });

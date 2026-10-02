@@ -1,3 +1,8 @@
+import {
+  ancestryOf, copyAncestry, mergeSyllable, mergeTail, recordChanges,
+  type NameAncestry, type SyllableOrigin, type TailOrigin,
+} from './name-ancestry';
+
 export type PlaceKind = 'continent' | 'island' | 'lake';
 export type Rng = () => number;
 export type PlaceSyllable = { onset: string; vowel: string; bridge?: string };
@@ -12,6 +17,7 @@ export const placeStem = (genome: PlaceGenome): string =>
 
 export type NameGenes = {
   chromosome: PlaceGenome;
+  ancestry?: NameAncestry;
   mutability: number;
   cooldown: number;
   generation: number;
@@ -62,7 +68,9 @@ const clone = (genome: PlaceGenome): PlaceGenome => ({
 });
 const draw = (rng: Rng): number => clamp(rng(), 0, 1 - Number.EPSILON);
 const choose = (rng: Rng, values: string[]): string => values[Math.floor(draw(rng) * values.length)];
-const copyGenes = (genes: NameGenes): NameGenes => ({ ...genes, chromosome: clone(genes.chromosome) });
+const copyGenes = (genes: NameGenes): NameGenes => ({
+  ...genes, chromosome: clone(genes.chromosome), ancestry: copyAncestry(ancestryOf(genes)),
+});
 const bridgesFor = (onset: string): string[] => BRIDGES[onset] ?? [''];
 
 // Capacity is expression, not DNA deletion. A dead band prevents waves near a
@@ -144,12 +152,12 @@ const founder = (rng: Rng): NameGenes => {
     diphthong ||= vowel.length > 1;
     syllables.push({ onset, vowel, bridge: index === 0 ? '' : choose(rng, bridgesFor(onset)) });
   }
-  return {
+  return copyGenes({
     chromosome: repair({ syllables, coda: choose(rng, CODAS), ending: choose(rng, ENDINGS) }),
     mutability: 0.75 + draw(rng) * 0.5,
     cooldown: 5 + draw(rng) * 5,
     generation: 0,
-  };
+  });
 };
 
 // A short form exposes one sound of its next boundary, not the final ending.
@@ -215,6 +223,7 @@ const mutate = (genes: NameGenes, capacity: Capacity, rng: Rng, saltation = draw
   }
   result.mutability = clamp(result.mutability * (1 + (draw(rng) - 0.5) * 0.08), 0.5, 1.5);
   result.cooldown = clamp(result.cooldown + (draw(rng) - 0.5) * 0.4, 5, 10);
+  recordChanges(result, genes.chromosome);
   return result;
 };
 
@@ -229,19 +238,24 @@ const setClosure = (chromosome: PlaceGenome, capacity: Capacity, closing: string
 
 const unique = (
   genes: NameGenes, capacity: Capacity, banned: ReadonlySet<string> | undefined,
-  previous?: string, preservePrefix?: string,
+  previous?: string, preservePrefix?: string, allowPrevious = false,
 ): NameGenes | null => {
   const acceptable = (candidate: NameGenes): boolean => {
     const stem = placeStem(expressName(candidate.chromosome, capacity));
-    return valid(candidate.chromosome) && stem !== previous && !banned?.has(stem)
+    return valid(candidate.chromosome) && (stem !== previous || allowPrevious)
+      && (!banned?.has(stem) || (allowPrevious && stem === previous))
       && (!preservePrefix || stem.startsWith(preservePrefix));
+  };
+  const inheritedChange = (candidate: NameGenes): NameGenes => {
+    recordChanges(candidate, genes.chromosome);
+    return candidate;
   };
   if (acceptable(genes)) return genes;
   for (const locus of [...visibleLoci(genes.chromosome, capacity)].reverse()) {
     for (const value of alternatives(genes.chromosome, locus)) {
       const candidate = copyGenes(genes);
       setAllele(candidate.chromosome, locus, value);
-      if (acceptable(candidate)) return candidate;
+      if (acceptable(candidate)) return inheritedChange(candidate);
     }
   }
   if (preservePrefix && capacity > 1) {
@@ -250,7 +264,7 @@ const unique = (
         const candidate = copyGenes(genes);
         candidate.chromosome.syllables[capacity - 1].vowel = vowel;
         setClosure(candidate.chromosome, capacity, coda);
-        if (acceptable(candidate)) return candidate;
+        if (acceptable(candidate)) return inheritedChange(candidate);
       }
     }
   }
@@ -261,7 +275,7 @@ const unique = (
         const candidate = copyGenes(genes);
         candidate.chromosome.syllables[0] = { onset, vowel, bridge: '' };
         setClosure(candidate.chromosome, capacity, coda);
-        if (acceptable(candidate)) return candidate;
+        if (acceptable(candidate)) return inheritedChange(candidate);
       }
     }
   }
@@ -278,42 +292,135 @@ const joinBridge = (leftCoda: string, right: PlaceSyllable): string => {
   return legal.find((bridge) => bridge === 'r' || bridge === 'l' || bridge === 'n') ?? '';
 };
 
+// Shared origin IDs define homologous material, even after rotation, mutation,
+// or a previous crossover. Sound similarity alone never establishes kinship.
 const weightedGenes = (parents: GeneticParent[], capacity: Capacity): NameGenes => {
   const ranked = parents.filter((parent) => parent.weight > 0)
-    .sort((left, right) => right.weight - left.weight);
+    .sort((left, right) => right.weight - left.weight
+      || ancestryOf(left.genes).order.join(',').localeCompare(ancestryOf(right.genes).order.join(',')));
   const total = ranked.reduce((sum, parent) => sum + parent.weight, 0);
-  const chromosome = clone(ranked[0].genes.chromosome);
-  const transplant = (slots: Capacity): void => {
-    const quotas = ranked.map((parent) => parent.weight / total * slots);
-    const counts = quotas.map(Math.floor);
-    const order = ranked.map((_, index) => index).sort((a, b) =>
-      (quotas[b] - counts[b]) - (quotas[a] - counts[a]) || a - b);
-    for (let left = slots - counts.reduce((sum, count) => sum + count, 0), index = 0;
-      left > 0; left -= 1, index += 1) counts[order[index]] += 1;
-    let position = 0;
-    let closing = chromosome.coda;
-    let ending = chromosome.ending;
-    for (let index = 0; index < ranked.length; index += 1) {
-      const count = counts[index];
-      if (!count) continue;
-      const parent = ranked[index];
-      const visible = parent.genome ?? parent.genes.chromosome;
-      for (let part = 0; part < count; part += 1) {
-        const sound = { ...(visible.syllables[part] ?? parent.genes.chromosome.syllables[part]) };
-        if (position > 0 && part === 0) sound.bridge = joinBridge(closing, sound);
-        chromosome.syllables[position++] = sound;
+  const remaining = new Set(ranked);
+  const groups: GeneticParent[][] = [];
+  while (remaining.size) {
+    const group = [remaining.values().next().value!];
+    remaining.delete(group[0]);
+    const origins = new Set(ancestryOf(group[0].genes).order);
+    // A hybrid can connect two families; take the full connected component.
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const parent of remaining) {
+        const ids = ancestryOf(parent.genes).syllables.map(({ id }) => id);
+        if (!ids.some((id) => origins.has(id))) continue;
+        group.push(parent);
+        remaining.delete(parent);
+        ids.forEach((id) => origins.add(id));
+        changed = true;
       }
-      closing = count === visible.syllables.length ? visible.coda
-        : count < 3 ? boundary(parent.genes.chromosome.syllables[count]).charAt(0) : parent.genes.chromosome.coda;
-      ending = parent.genes.chromosome.ending;
     }
-    setClosure(chromosome, slots, closing);
-    if (slots === 3) chromosome.ending = ending;
+    groups.push(group);
+  }
+  const tail = (group: GeneticParent[], field: 'coda' | 'ending'): TailOrigin => {
+    const alternatives = new Map<number, Array<{ origin: TailOrigin; weight: number }>>();
+    for (const parent of group) {
+      const origin = ancestryOf(parent.genes)[field];
+      const copies = alternatives.get(origin.id) ?? [];
+      copies.push({ origin, weight: parent.weight });
+      alternatives.set(origin.id, copies);
+    }
+    const candidates = [...alternatives.values()].sort((a, b) =>
+      b.reduce((sum, copy) => sum + copy.weight, 0) - a.reduce((sum, copy) => sum + copy.weight, 0)
+      || a[0].origin.id - b[0].origin.id);
+    return mergeTail(candidates[0]);
   };
-  transplant(3);
-  if (capacity < 3) transplant(capacity);
+  const families = groups.map((group) => {
+    // The latest inherited arrangement is the alignment scaffold. Rejoining
+    // an old relative must not resurrect a discarded ancestral slot at the
+    // expense of a donor already incorporated into a hybrid.
+    const ordered = [...group].sort((a, b) =>
+      ancestryOf(b.genes).orderRevision - ancestryOf(a.genes).orderRevision || b.weight - a.weight
+      || ancestryOf(a.genes).order.join(',').localeCompare(ancestryOf(b.genes).order.join(',')));
+    const scaffold = ancestryOf(ordered[0].genes).order;
+    const copies = new Map<number, Array<{ origin: SyllableOrigin; weight: number }>>();
+    const order: number[] = [];
+    for (const parent of ordered) {
+      const ancestry = ancestryOf(parent.genes);
+      const ids = group.length === 1 ? ancestry.syllables.map(({ id }) => id) : ancestry.order;
+      for (const id of ids) if (!order.includes(id)) order.push(id);
+      for (const origin of ancestry.syllables) {
+        const variants = copies.get(origin.id) ?? [];
+        variants.push({ origin, weight: parent.weight });
+        copies.set(origin.id, variants);
+      }
+    }
+    const material = order.map((id) => {
+      const variants = copies.get(id)!;
+      const origin = mergeSyllable(variants);
+      const sound = group.length === 1
+        ? { ...group[0].genes.chromosome.syllables.find((_, index) =>
+          ancestryOf(group[0].genes).syllables[index].id === id)! }
+        : { onset: origin.onset.value, vowel: origin.vowel.value, bridge: origin.bridge.value };
+      return { origin, sound, shared: variants.length > 1,
+        support: variants.reduce((sum, copy) => sum + copy.weight, 0) };
+    });
+    // Shared material gets one slot. In a mixed family, overlap support chooses
+    // which distinct material fits the finite chromosome, retaining its order.
+    const priorities = [...material].sort((a, b) => Number(b.shared) - Number(a.shared)
+      || Number(scaffold.includes(b.origin.id)) - Number(scaffold.includes(a.origin.id))
+      || b.support - a.support
+      || order.indexOf(a.origin.id) - order.indexOf(b.origin.id));
+    return { material, priorities, weight: group.reduce((sum, parent) => sum + parent.weight, 0),
+      coda: tail(group, 'coda'), ending: tail(group, 'ending') };
+  });
+  const quotas = families.map((family) => family.weight / total * capacity);
+  const counts = quotas.map(Math.floor);
+  const byRemainder = families.map((_, index) => index).sort((a, b) =>
+    quotas[b] - counts[b] - (quotas[a] - counts[a]) || a - b);
+  for (let left = capacity - counts.reduce((sum, count) => sum + count, 0), index = 0;
+    left > 0; left -= 1, index += 1) counts[byRemainder[index]] += 1;
+  // Allocate the entire DNA before projecting the visible prefix. Otherwise
+  // a small reunion could put shared roots before a hybrid's silent donor,
+  // accidentally changing its canonical order just because the area shrank.
+  const visibleCounts = [...counts];
+  while (counts.reduce((sum, count) => sum + count, 0) < 3) {
+    const index = families.map((_, i) => i).sort((a, b) =>
+      (families[b].weight / total * 3 - counts[b]) - (families[a].weight / total * 3 - counts[a]) || a - b)
+      .find((i) => counts[i] < families[i].material.length)!;
+    counts[index] += 1;
+  }
+  const selected = families.map((family, index) => {
+    const material = new Set(family.priorities.slice(0, counts[index]));
+    return family.material.filter((part) => material.has(part));
+  });
+  const blocks: Array<{ family: number; part: typeof families[number]['material'][number] }> = [];
+  selected.forEach((material, family) => material.slice(0, visibleCounts[family])
+    .forEach((part) => blocks.push({ family, part })));
+  // Hidden slots retain donors too, without putting a second copy of a visible
+  // ancestral syllable in the reserve. Growth unfolds this exact chromosome.
+  selected.forEach((material, family) => material.slice(visibleCounts[family])
+    .forEach((part) => blocks.push({ family, part })));
+  const syllables: PlaceSyllable[] = [];
+  let closing = '';
+  blocks.forEach(({ family: index, part }, position) => {
+    const family = families[index];
+    const sound = { ...part.sound };
+    if (position > 0 && blocks[position - 1].family !== index) sound.bridge = joinBridge(closing, sound);
+    syllables.push(sound);
+    const following = family.material[family.material.indexOf(part) + 1];
+    closing = following ? boundary(following.sound).charAt(0) : family.coda.value;
+  });
+  const last = families[blocks[2].family];
+  const order = blocks.map(({ part }) => part.origin.id);
+  const matching = ranked.map(({ genes }) => ancestryOf(genes))
+    .filter((ancestry) => ancestry.order.every((id, index) => id === order[index]));
+  const ancestry: NameAncestry = {
+    syllables: blocks.map(({ part }) => part.origin), order,
+    orderRevision: matching.length ? Math.max(...matching.map((parent) => parent.orderRevision))
+      : Math.max(...ranked.map(({ genes }) => ancestryOf(genes).orderRevision)) + 1,
+    coda: last.coda, ending: last.ending,
+  };
   return {
-    chromosome: repair(chromosome),
+    chromosome: repair({ syllables, coda: last.coda.value, ending: last.ending.value }),
+    ancestry: copyAncestry(ancestry),
     mutability: ranked.reduce((sum, parent) => sum + parent.genes.mutability * parent.weight, 0) / total,
     cooldown: clamp(ranked.reduce((sum, parent) => sum + parent.genes.cooldown * parent.weight, 0) / total, 5, 10),
     generation: Math.max(...ranked.map((parent) => parent.genes.generation)) + 1,
@@ -352,6 +459,8 @@ export class NameEvolution {
       const offset = Math.abs(options.fragment ?? 0) % (4 - this.capacity);
       genes.chromosome.syllables = [...genes.chromosome.syllables.slice(offset),
         ...genes.chromosome.syllables.slice(0, offset)];
+      genes.ancestry!.syllables = [...genes.ancestry!.syllables.slice(offset),
+        ...genes.ancestry!.syllables.slice(0, offset)];
       if (this.capacity < 3) {
         const closing = offset + this.capacity < 3
           ? boundary(options.parent.chromosome.syllables[offset + this.capacity]).charAt(0)
@@ -370,8 +479,8 @@ export class NameEvolution {
   recombine(parents: GeneticParent[], areaFraction: number): void {
     const viable = parents.filter((parent) => parent.weight > 0);
     if (viable.length < 2) return;
-    const key = viable.map(({ genes, genome, weight }) =>
-      `${placeStem(genes.chromosome)}:${placeStem(genome ?? genes.chromosome)}:${weight}`).join('|');
+    const key = `${nameCapacity(areaFraction)}:` + viable.map(({ genes, genome, weight }) =>
+      `${placeStem(genes.chromosome)}:${placeStem(genome ?? genes.chromosome)}:${JSON.stringify(ancestryOf(genes))}:${weight}`).join('|');
     if (key === this.inheritanceKey) return;
     this.inheritanceKey = key;
     const capacity = nameCapacity(areaFraction);
@@ -405,7 +514,8 @@ export class NameEvolution {
     }
     if (this.pending) {
       const candidate = unique(this.pending.genes, this.pending.capacity, banned,
-        placeStem(this.genome), this.pending.cause === 'growth' ? placeStem(this.genome) : undefined);
+        placeStem(this.genome), this.pending.cause === 'growth' ? placeStem(this.genome) : undefined,
+        this.pending.cause === 'recombination');
       if (!candidate) return null;
       if (candidate !== this.pending.genes) {
         this.pending = { ...this.pending, genes: candidate,
@@ -425,12 +535,15 @@ export class NameEvolution {
 
   commit(proposal: NameProposal, now: number): void {
     if (proposal !== this.pending || now + 1e-10 < this.nextChangeAt) return;
+    const renamed = placeStem(proposal.genome) !== placeStem(this.genome);
     this.genes = copyGenes(proposal.genes);
     this.genome = clone(proposal.genome);
     this.capacity = proposal.capacity;
     this.pending = null;
     this.inheritance = null;
-    this.exposure = 0;
-    this.nextChangeAt = now + clamp(this.genes.cooldown, 5, 10);
+    if (renamed) {
+      this.exposure = 0;
+      this.nextChangeAt = now + clamp(this.genes.cooldown, 5, 10);
+    }
   }
 }

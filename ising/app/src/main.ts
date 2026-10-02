@@ -26,11 +26,11 @@ const scaleInput = byId<HTMLInputElement>('scale');
 const temperatureInput = byId<HTMLInputElement>('temperature');
 const timeSpeedInput = byId<HTMLInputElement>('time-speed');
 const brushSizeInput = byId<HTMLInputElement>('brush-size');
+const showLabelsInput = byId<HTMLInputElement>('show-labels');
 const scaleValue = byId<HTMLOutputElement>('scale-value');
 const temperatureValue = byId<HTMLOutputElement>('temperature-value');
 const timeSpeedValue = byId<HTMLOutputElement>('time-speed-value');
 const brushSizeValue = byId<HTMLOutputElement>('brush-size-value');
-const explanation = byId<HTMLParagraphElement>('explanation');
 const settingsToggle = byId<HTMLButtonElement>('settings-toggle');
 const settingsPanel = byId<HTMLElement>('settings-panel');
 const pauseButton = byId<HTMLButtonElement>('pause');
@@ -40,20 +40,13 @@ const roughButton = byId<HTMLButtonElement>('rough');
 const smoothButton = byId<HTMLButtonElement>('smooth');
 const scaleDock = byId<HTMLInputElement>('scale-dock');
 const scaleReadout = byId<HTMLOutputElement>('scale-readout');
-const freezeButton = byId<HTMLButtonElement>('freeze');
+const coolButton = byId<HTMLButtonElement>('cool');
 const heatButton = byId<HTMLButtonElement>('heat');
 const phaseValue = byId<HTMLElement>('phase');
 const magnetizationValue = byId<HTMLElement>('magnetization');
 const energyValue = byId<HTMLElement>('energy');
 const fatalError = byId<HTMLElement>('fatal-error');
 const placeLabels = byId<HTMLElement>('place-labels');
-
-const scaleCopy = [
-  'Each point is one ±1 spin. The local rule is visible, but there is no independent large object yet.',
-  'Nearby spins are averaged on the GPU. Random flips cancel while aligned regions grow stronger.',
-  'The bright zero contour is the coastline. Wider views add elevation lines across the orange land.',
-  'A large-scale observer cannot see individual flips. Regions that keep their shape are named like places on a map.',
-];
 
 type Point = { x: number; y: number };
 type PlaceLabelNode = {
@@ -76,7 +69,7 @@ async function main(): Promise<void> {
   let timeSpeed = Number(timeSpeedInput.value);
   let brushDiameter = Number(brushSizeInput.value);
   let paused = false;
-  let settingsOpen = true;
+  let settingsOpen = false;
   let painting = false;
   let forceHotBrush = false;
   let pointerActive = false;
@@ -111,7 +104,7 @@ async function main(): Promise<void> {
   const labelLightVersions = new Map<number, number>();
   const roughHolds = new Set<string>();
   const smoothHolds = new Set<string>();
-  const freezeHolds = new Set<string>();
+  const coolHolds = new Set<string>();
   const heatHolds = new Set<string>();
   const CHAOS_TEMPERATURE = CRITICAL_TEMPERATURE + 0.2;
   const MIN_SCALE = Number(scaleInput.min);
@@ -167,7 +160,6 @@ async function main(): Promise<void> {
     scaleDock.value = scale.toFixed(2);
     scaleValue.textContent = scaleText;
     scaleReadout.textContent = scaleText;
-    explanation.textContent = scaleCopy[Math.min(3, Math.floor(scale + 0.25))];
     roughButton.setAttribute('aria-label', `Rough, observation scale ${scale.toFixed(2)}`);
     smoothButton.setAttribute('aria-label', `Smooth, observation scale ${scale.toFixed(2)}`);
     document.documentElement.style.setProperty(
@@ -182,9 +174,9 @@ async function main(): Promise<void> {
     const progress = temperaturePaddleProgress(
       temperature, baseTemperature, MIN_TEMPERATURE, MAX_TEMPERATURE,
     );
-    freezeButton.style.setProperty('--paddle-progress', progress.freeze.toFixed(4));
+    coolButton.style.setProperty('--paddle-progress', progress.freeze.toFixed(4));
     heatButton.style.setProperty('--paddle-progress', progress.heat.toFixed(4));
-    freezeButton.setAttribute('aria-label', `Freeze, current temperature ${temperature.toFixed(2)}`);
+    coolButton.setAttribute('aria-label', `Cool, current temperature ${temperature.toFixed(2)}`);
     heatButton.setAttribute('aria-label', `Heat, current temperature ${temperature.toFixed(2)}`);
     const distance = temperature - CRITICAL_TEMPERATURE;
     if (distance < -0.2) phaseValue.textContent = 'ordered';
@@ -453,7 +445,7 @@ async function main(): Promise<void> {
 
   bindHold(roughButton, roughHolds);
   bindHold(smoothButton, smoothHolds);
-  bindHold(freezeButton, freezeHolds);
+  bindHold(coolButton, coolHolds);
   bindHold(heatButton, heatHolds);
 
   timeSpeedInput.addEventListener('input', () => {
@@ -467,6 +459,13 @@ async function main(): Promise<void> {
     renderDirty = true;
   });
 
+  const updateLabelsVisibility = (): void => {
+    // Keep tracking places while hidden so toggling visibility preserves their identities.
+    placeLabels.hidden = !showLabelsInput.checked;
+  };
+  showLabelsInput.addEventListener('change', updateLabelsVisibility);
+  updateLabelsVisibility();
+
   window.addEventListener('keydown', (event) => {
     if (event.code !== 'BracketLeft' && event.code !== 'BracketRight') return;
     event.preventDefault();
@@ -478,6 +477,7 @@ async function main(): Promise<void> {
   const setSettingsOpen = (open: boolean): void => {
     settingsOpen = open;
     settingsPanel.classList.toggle('is-closed', !settingsOpen);
+    settingsPanel.inert = !settingsOpen;
     settingsPanel.setAttribute('aria-hidden', String(!settingsOpen));
     settingsToggle.setAttribute('aria-expanded', String(settingsOpen));
     settingsToggle.setAttribute('aria-label', settingsOpen ? 'Close settings' : 'Open settings');
@@ -647,13 +647,13 @@ async function main(): Promise<void> {
     touchPaintPending = false;
     roughHolds.clear();
     smoothHolds.clear();
-    freezeHolds.clear();
+    coolHolds.clear();
     heatHolds.clear();
     temperatureHoldSeconds = 0;
     previousTemperatureDirection = 0;
     roughButton.setAttribute('aria-pressed', 'false');
     smoothButton.setAttribute('aria-pressed', 'false');
-    freezeButton.setAttribute('aria-pressed', 'false');
+    coolButton.setAttribute('aria-pressed', 'false');
     heatButton.setAttribute('aria-pressed', 'false');
     renderDirty = true;
   });
@@ -697,7 +697,7 @@ async function main(): Promise<void> {
       }
     }
 
-    const temperatureDirection = Number(heatHolds.size > 0) - Number(freezeHolds.size > 0);
+    const temperatureDirection = Number(heatHolds.size > 0) - Number(coolHolds.size > 0);
     if (temperatureDirection !== previousTemperatureDirection) {
       temperatureHoldSeconds = 0;
       previousTemperatureDirection = temperatureDirection;

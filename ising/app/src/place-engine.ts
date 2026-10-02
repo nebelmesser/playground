@@ -33,7 +33,7 @@ type Placement = {
   route: Pose[];
 };
 type Track = {
-  id: number; stem: string; name: NameEvolution; lineage: number;
+  id: number; stem: string; name: NameEvolution;
   kind: PlaceKind; text: string; area: number;
   stability: number; agreement: number; missing: number; confirmed: boolean; present: boolean;
   center: Point; bounds: Component['bounds']; lastMask: Uint8Array | null;
@@ -281,7 +281,7 @@ export class PlaceTracker {
       this.usedStems.add(stem);
       const text = this.nameText(name.genome);
       const track: Track = {
-        id, stem, name, lineage: ancestor?.lineage ?? id,
+        id, stem, name,
         kind: region.kind, text,
         area: region.area, stability: 0.15, agreement: 1, missing: 0, confirmed: true, present: false,
         center: region.center, bounds: region.bounds, lastMask: null,
@@ -362,6 +362,10 @@ export class PlaceTracker {
   private rename(track: Track, proposal: NameProposal, mask: Uint8Array, now: number): boolean {
     const stem = placeStem(proposal.genome);
     if (now < track.name.nextChangeAt || (stem !== track.stem && this.usedStems.has(stem))) return false;
+    if (stem === track.stem) {
+      track.name.commit(proposal, now);
+      return true;
+    }
     const text = this.nameText(proposal.genome);
     const placement = track.placement;
     // Expression waits for the existing seat to accommodate it. Updating text

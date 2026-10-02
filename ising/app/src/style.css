@@ -84,12 +84,14 @@ input { font: inherit; }
   top: calc(clamp(14px, 3vw, 34px) + 54px);
   right: clamp(14px, 3vw, 34px);
   z-index: 2;
-  width: min(370px, calc(100vw - 28px));
+  display: grid;
+  gap: 12px;
+  width: min(290px, calc(100vw - 28px));
   max-height: calc(100vh - 100px);
   overflow: auto;
-  padding: 20px;
+  padding: 14px;
   border: 1px solid var(--hairline);
-  border-radius: 20px;
+  border-radius: 16px;
   background: var(--panel);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.3);
   -webkit-backdrop-filter: blur(22px) saturate(125%);
@@ -146,21 +148,19 @@ input { font: inherit; }
 }
 
 .panel-title {
-  margin: 0 0 18px;
+  margin: 0;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.17em;
   text-transform: uppercase;
 }
 
-.control + .control { margin-top: 18px; }
-
 .control-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 8px;
+  gap: 12px;
+  margin-bottom: 4px;
 }
 
 .control label {
@@ -228,29 +228,29 @@ input[type="range"]::-moz-range-thumb {
   background: #f3f0e8;
 }
 
-.scale-labels,
-.temperature-labels {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 1px;
-  color: #777b85;
-  font-size: 9px;
-  letter-spacing: 0.04em;
-}
-
-.explanation {
-  margin: 18px 0 14px;
-  padding: 12px 13px;
-  border-left: 2px solid rgba(243, 240, 232, 0.52);
-  color: #c4c4c8;
-  background: rgba(255, 255, 255, 0.025);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
 .actions {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.labels-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.labels-option input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--cold);
+  cursor: pointer;
 }
 
 .actions button {
@@ -283,10 +283,12 @@ input[type="range"]::-moz-range-thumb {
 
 .stats {
   display: grid;
-  grid-template-columns: 1fr 1.2fr 0.8fr;
-  gap: 14px;
-  margin: 17px 0 0;
+  grid-template-columns: 1fr 1.8fr 1fr;
+  gap: 8px;
+  margin: 0;
 }
+
+.stat { min-width: 0; }
 
 .stat dt {
   overflow: hidden;
@@ -413,13 +415,13 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .rough-paddle .paddle-label,
-.freeze-paddle .paddle-label { --paddle-label-x: 57%; }
+.cool-paddle .paddle-label { --paddle-label-x: 57%; }
 
 .smooth-paddle .paddle-label,
 .heat-paddle .paddle-label { --paddle-label-x: 43%; }
 
 .rough-paddle .paddle-progress,
-.freeze-paddle .paddle-progress {
+.cool-paddle .paddle-progress {
   clip-path: polygon(15% 0, 100% 0, 100% 100%, 15% 100%, 0 50%);
 }
 
@@ -434,12 +436,12 @@ input[type="range"]::-moz-range-thumb {
   outline-offset: 3px;
 }
 
-.freeze-paddle {
+.cool-paddle {
   --paddle-fill: rgba(25, 94, 184, 0.95);
   --paddle-progress-color: rgba(83, 176, 255, 0.72);
 }
 
-.freeze-paddle .paddle-progress { transform-origin: right center; }
+.cool-paddle .paddle-progress { transform-origin: right center; }
 
 .heat-paddle {
   --paddle-fill: rgba(181, 49, 31, 0.95);
@@ -524,15 +526,11 @@ input[type="range"]::-moz-range-thumb {
   .panel {
     top: 68px;
     right: 10px;
-    width: min(350px, calc(100vw - 20px));
+    width: min(290px, calc(100vw - 20px));
     max-height: calc(100dvh - 150px);
-    padding: 17px;
-    border-radius: 18px;
   }
 
   .settings-toggle { top: 10px; right: 10px; }
-  .control + .control { margin-top: 14px; }
-  .explanation { margin-top: 14px; }
   .hint { display: none; }
   .legend { right: 16px; bottom: max(55px, calc(env(safe-area-inset-bottom) + 44px)); }
   .temperature-paddles {
