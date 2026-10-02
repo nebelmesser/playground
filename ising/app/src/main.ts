@@ -78,6 +78,7 @@ async function main(): Promise<void> {
   let lastPaintPoint: Point | null = null;
   let renderDirty = true;
   let stepAccumulator = 0;
+  let simulationSeconds = 0;
   let previousFrame = performance.now();
   let previousStats = 0;
   let statsInFlight = false;
@@ -726,6 +727,7 @@ async function main(): Promise<void> {
       if (halfSteps > 0) {
         stepAccumulator -= halfSteps;
         simulation.step(temperature, halfSteps);
+        simulationSeconds += halfSteps / HALF_STEPS_PER_SECOND;
         renderDirty = true;
       }
     }
@@ -757,12 +759,13 @@ async function main(): Promise<void> {
       lastRegionRequest = timestamp;
       regionInFlight = true;
       const generation = placesGeneration;
+      const sampledSimulationSeconds = simulationSeconds;
       void simulation.readRegionSample(observationRadiusAt(labelScale), labelScale).then((sample) => {
         if (generation !== placesGeneration || !sample) return;
         if (temperature > CHAOS_TEMPERATURE) return;
         labelLight = sample;
         lightVersion += 1;
-        places.ingest(sample, temperature);
+        places.ingest(sample, temperature, sampledSimulationSeconds);
       }).catch((error: unknown) => {
         console.warn('Could not read Ising regions.', error);
       }).finally(() => {

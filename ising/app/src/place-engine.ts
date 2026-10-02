@@ -107,6 +107,7 @@ export class PlaceTracker {
   private viewport = { width: 1, height: 1 };
   private synced = false;
   private lastIngest = -1;
+  private lastNameTime = -1;
 
   reset(): void {
     this.tracks.clear();
@@ -116,6 +117,7 @@ export class PlaceTracker {
     this.height = 0;
     this.synced = false;
     this.lastIngest = -1;
+    this.lastNameTime = -1;
   }
 
   advance(
@@ -144,11 +146,17 @@ export class PlaceTracker {
     return labels;
   }
 
-  ingest(sample: RegionSample, temperature = DEFAULT_TEMPERATURE): void {
+  ingest(sample: RegionSample, temperature = DEFAULT_TEMPERATURE, simulationSeconds?: number): void {
     if (sample.width < 2 || sample.height < 2 || sample.signs.length !== sample.width * sample.height) return;
-    const now = performance.now() / 1000;
-    const gap = this.lastIngest < 0 ? 0 : Math.min(2, now - this.lastIngest);
-    this.lastIngest = now;
+    const observedAt = performance.now() / 1000;
+    const gap = this.lastIngest < 0 ? 0 : Math.min(2, observedAt - this.lastIngest);
+    this.lastIngest = observedAt;
+    // Genetic exposure and its cooldown share the simulation's clock. The
+    // placement, fades and short-term identity memory keep their real time.
+    const now = simulationSeconds ?? observedAt;
+    const nameElapsed = this.lastNameTime < 0 ? 0
+      : simulationSeconds === undefined ? gap : Math.max(0, now - this.lastNameTime);
+    this.lastNameTime = now;
     for (const track of this.tracks.values()) track.present = false;
     if (sample.width !== this.width || sample.height !== this.height) {
       this.owners = this.regrid(this.owners, this.width, this.height, sample.width, sample.height);
@@ -342,7 +350,7 @@ export class PlaceTracker {
     for (const { track, region } of assignments) {
       const mask = this.allowedMask(region);
       const proposal = track.name.propose({
-        areaFraction: region.area / sample.signs.length, temperature, elapsed: gap,
+        areaFraction: region.area / sample.signs.length, temperature, elapsed: nameElapsed,
         now, banned: this.usedStems,
       });
       if (proposal) this.rename(track, proposal, mask, now);
