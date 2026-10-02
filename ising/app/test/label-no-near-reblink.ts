@@ -1,4 +1,5 @@
 import { PlaceTracker, type PlaceLabel } from '../src/place-engine.ts';
+import { FITTING_NAME, fixtureName } from './helpers/name-fixture.ts';
 
 const assert = (condition: boolean, message: string): void => {
   if (!condition) throw new Error(message);
@@ -35,6 +36,8 @@ const rotated = (degrees: number, wobble = 0) => {
 const tracker = new PlaceTracker();
 tracker.advance(0.016, 'map', viewport);
 tracker.ingest(rotated(-70));
+fixtureName(tracker, FITTING_NAME);
+tracker.ingest(rotated(-70));
 let labels: PlaceLabel[] = [];
 for (let frame = 0; frame < 100; frame += 1) labels = tracker.advance(1 / 30, 'map', viewport);
 assert(labels.length === 1 && labels[0].opacity > 0.9, 'initial label did not settle');
@@ -68,6 +71,8 @@ assert(minimumOpacity > 0.25, `same-place retarget faded label to ${minimumOpaci
 // hold an impossible abrupt turn, but it must not freeze every local update.
 const turning = new PlaceTracker();
 turning.advance(0.016, 'map', viewport);
+turning.ingest(rotated(-70));
+fixtureName(turning, FITTING_NAME);
 turning.ingest(rotated(-70));
 for (let frame = 0; frame < 100; frame += 1) labels = turning.advance(1 / 30, 'map', viewport);
 const turningId = labels[0].id;

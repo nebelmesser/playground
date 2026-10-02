@@ -1,4 +1,5 @@
 import { PlaceTracker, type PlaceLabel } from '../src/place-engine.ts';
+import { FITTING_NAME, LONG_NAME, fixtureName } from './helpers/name-fixture.ts';
 
 let nameSeed = 0x5eed1234;
 Math.random = () => {
@@ -197,6 +198,8 @@ const run = async (): Promise<void> => {
   const named = new PlaceTracker();
   named.advance(0.016, 'map', VIEW);
   named.ingest(sample(6, 26));
+  fixtureName(named, FITTING_NAME);
+  named.ingest(sample(6, 26));
   const continent = settle(named);
   assert(continent.length === 1, 'continent setup has no label');
   assert(continent[0].kind === 'continent' && /^[A-Z][a-z]+$/.test(continent[0].text)
@@ -227,6 +230,31 @@ const run = async (): Promise<void> => {
     maxFontStep: Number(maxFontStep.toFixed(2)),
   });
 
+  // A long inscription genuinely cannot fit the smaller footprint. It may
+  // fade, but its tracked identity and DNA must survive the naming cooldown.
+  const savedNameSeed = nameSeed;
+  const longNamed = new PlaceTracker();
+  longNamed.advance(0.016, 'map', VIEW);
+  longNamed.ingest(sample(6, 26));
+  fixtureName(longNamed, LONG_NAME);
+  longNamed.ingest(sample(6, 26));
+  const longBefore = settle(longNamed)[0];
+  assert(longBefore !== undefined, 'long-name setup has no label');
+  const probe = longNamed as unknown as { tracks: Map<number, { text: string; name: { nextChangeAt: number; genes: unknown } }> };
+  const originalTrack = [...probe.tracks.values()][0];
+  const originalDNA = JSON.stringify(originalTrack.name.genes);
+  longNamed.ingest(sample(12, 20, 12, 20));
+  for (let frame = 0; frame < 90; frame += 1) longNamed.advance(1 / 30, 'map', VIEW);
+  const longAfter = longNamed.advance(1 / 30, 'map', VIEW);
+  assert([...probe.tracks.values()].includes(originalTrack) && originalTrack.text === longBefore.text
+    && JSON.stringify(originalTrack.name.genes) === originalDNA
+    && performance.now() / 1000 < originalTrack.name.nextChangeAt,
+    'an impossible long inscription bypassed cooldown or lost hereditary identity');
+  assert(longAfter.every((label) => label.opacity < 0.1 || inside(label, 12, 20, 12, 20)),
+    'an unfit long inscription remained visible outside its region');
+  console.log('unfit long name fades while its identity waits', longBefore.text);
+  nameSeed = savedNameSeed;
+
   // A one-cell coast wobble must not step the font.
   const wobble = new PlaceTracker();
   wobble.advance(0.016, 'map', VIEW);
@@ -254,6 +282,8 @@ const run = async (): Promise<void> => {
   const neck = new PlaceTracker();
   neck.advance(0.016, 'map', VIEW);
   neck.ingest(land([[36, 46, 15, 23]]));
+  fixtureName(neck, FITTING_NAME);
+  neck.ingest(land([[36, 46, 15, 23]]));
   const pinched = settle(neck);
   assert(pinched.length === 1, 'neck setup has no label');
   const expandedNeck = land([[4, 22, 6, 30], [22, 36, 12, 26], [36, 46, 15, 23]]);
@@ -273,6 +303,8 @@ const run = async (): Promise<void> => {
   const lobes = new PlaceTracker();
   lobes.advance(0.016, 'map', VIEW);
   const equal = land([[14, 26, 12, 24], [26, 32, 17, 19], [32, 44, 12, 24]]);
+  lobes.ingest(equal);
+  fixtureName(lobes, FITTING_NAME);
   lobes.ingest(equal);
   const central = settle(lobes);
   assert(central.length === 1, 'equal lobes produced no single label');
@@ -306,6 +338,8 @@ const run = async (): Promise<void> => {
   const blocked = new PlaceTracker();
   blocked.advance(0.016, 'map', VIEW);
   blocked.ingest(land([[3, 13, 14, 22]]));
+  fixtureName(blocked, FITTING_NAME);
+  blocked.ingest(land([[3, 13, 14, 22]]));
   const oldSeat = settle(blocked);
   assert(oldSeat.length === 1, 'blocked-channel setup has no label');
   blocked.ingest(land([[3, 13, 14, 22], [13, 23, 17, 18], [23, 46, 4, 32]]));
@@ -337,6 +371,8 @@ const run = async (): Promise<void> => {
   // current lobe offers a similarly good seat.
   const comparable = new PlaceTracker();
   comparable.advance(0.016, 'map', VIEW);
+  comparable.ingest(land([[4, 16, 12, 24]]));
+  fixtureName(comparable, FITTING_NAME);
   comparable.ingest(land([[4, 16, 12, 24]]));
   const comparableSeat = settle(comparable);
   comparable.ingest(land([[4, 16, 12, 24], [16, 34, 17, 18], [34, 46, 4, 32]]));
