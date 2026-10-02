@@ -5,11 +5,17 @@
 ## Double Pendulum Fractal Explorer
 [![Double Pendulum Fractal Explorer](fractal/img/preview.jpg)](fractal/double-pendulum.html)
 
-## 4D Stereo Viewer
-[![4D Viewer](4d/img/matryoshka.png)](4d/viewer.html)
+## Escher Droste Effect Editor
+<a href="/escher/"><video src="img/escher-droste.mp4" width="920" height="920" autoplay loop muted playsinline></video></a>
+
 
 ## Hilbert Fractal Clock
 [![Hilbert Fractal Clock](hilbert/img/screen.png)](hilbert/)
+
+## 4D Stereo Viewer
+[![4D Viewer](4d/img/matryoshka.png)](4d/viewer.html)
+
+
 
 ## Double Pendulum Fractal Zoom
 My video made with [dp_map](https://github.com/nebelmesser/dp_map)

@@ -20,8 +20,11 @@ section,
   max-width: 880px;
 }
 
-section img {
+section img,
+section video {
   display: block;
+  max-width: 100%;
+  height: auto;
   border-radius: 8px;
   border: 1px solid #434343;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
