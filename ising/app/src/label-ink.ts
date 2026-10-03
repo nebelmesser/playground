@@ -1,17 +1,33 @@
 import type { PlaceLabel } from './place-engine';
+import { DEFAULT_OPTIONS, type IsingOptions, type Rgb } from './url-options';
 
 export type LuminanceField = { width: number; height: number; luminance: Float32Array };
 export type InkMode = 'dark' | 'light';
-export type InkState = {
-  mode: InkMode; darkContrast: number; lightContrast: number;
-  weakSamples: number; opacity: number;
+export type InkMeasurement = { dark: number; light: number; darkOpacity: number; lightOpacity: number };
+export type InkState = InkMeasurement & {
+  mode: InkMode; darkContrast: number; lightContrast: number; weakSamples: number;
 };
+export type InkOpacity = { value: number; velocity: number };
 export type InkTransition = { from: InkMode; to: InkMode; progress: number; velocity: number };
 
-const INKS = {
-  land: { dark: '#050302', light: '#ffd5a6' },
-  water: { dark: '#06132e', light: '#c4eaff' },
-} as const;
+export type InkPalette = Record<'land' | 'water', Record<InkMode, string>>;
+
+const deriveInk = (base: Rgb): Record<InkMode, string> => {
+  const tint = (baseWeight: number, neutral: number): string => '#' + base.map((channel) => (
+    Math.round((channel * baseWeight + neutral * (1 - baseWeight)) * 255)
+      .toString(16).padStart(2, '0')
+  )).join('');
+  // The same shade/tint rule preserves each area's hue, including neutral
+  // palettes, while keeping the two inks far enough apart for contrast choice.
+  return { dark: tint(0.1, 0), light: tint(0.15, 1) };
+};
+
+export const createInkPalette = (colors: Pick<IsingOptions, 'terrainColor' | 'waterColor'>): InkPalette => ({
+  land: deriveInk(colors.terrainColor),
+  water: deriveInk(colors.waterColor),
+});
+
+const DEFAULT_INKS = createInkPalette(DEFAULT_OPTIONS);
 
 const clamp = (value: number, low: number, high: number): number => Math.max(low, Math.min(high, value));
 
@@ -28,15 +44,16 @@ const contrast = (first: number, second: number): number => (
   (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05)
 );
 
-export const inkColor = (kind: PlaceLabel['kind'], mode: InkMode): string => (
-  INKS[kind === 'lake' ? 'water' : 'land'][mode]
+export const inkColor = (kind: PlaceLabel['kind'], mode: InkMode, palette: InkPalette = DEFAULT_INKS): string => (
+  palette[kind === 'lake' ? 'water' : 'land'][mode]
 );
 
 export const blendedInkColor = (
   kind: PlaceLabel['kind'], from: InkMode, to: InkMode, blend: number,
+  palette: InkPalette = DEFAULT_INKS,
 ): string => {
-  const start = inkColor(kind, from);
-  const end = inkColor(kind, to);
+  const start = inkColor(kind, from, palette);
+  const end = inkColor(kind, to, palette);
   const channels = [1, 3, 5].map((offset) => {
     const first = parseInt(start.slice(offset, offset + 2), 16);
     const last = parseInt(end.slice(offset, offset + 2), 16);
@@ -45,18 +62,43 @@ export const blendedInkColor = (
   return `rgb(${channels.join(', ')})`;
 };
 
+const encodedChannel = (linear: number): number => (
+  linear <= 0.0031308 ? linear * 12.92 : 1.055 * linear ** (1 / 2.4) - 0.055
+);
+
+export const labelTargetContrast = (fontSize: number): number => (
+  // Larger letterforms need less contrast: one continuous rule for every label.
+  1.6 + 1.6 / (1 + (Math.max(0, fontSize) / 24) ** 2)
+);
+
+export const contrastOpacity = (background: number, ink: number, target: number): number => {
+  const desired = ink < background
+    ? (background + 0.05) / target - 0.05
+    : (background + 0.05) * target - 0.05;
+  // CSS alpha blends encoded channels. Equivalent-gray luminance approximates
+  // that composition using the existing small GPU luminance readback.
+  const start = encodedChannel(background);
+  const end = encodedChannel(ink);
+  if (Math.abs(end - start) < 1e-6) return 1;
+  return clamp((encodedChannel(clamp(desired, 0, 1)) - start) / (end - start), 0, 1);
+};
+
 export const labelInkContrast = (
-  label: Pick<PlaceLabel, 'kind' | 'x' | 'y' | 'width' | 'height' | 'angle'>,
+  label: Pick<PlaceLabel, 'kind' | 'x' | 'y' | 'width' | 'height' | 'angle' | 'fontSize'>,
   field: LuminanceField,
   viewport: { width: number; height: number },
-): { dark: number; light: number } => {
+  palette: InkPalette = DEFAULT_INKS,
+): InkMeasurement => {
   const radians = label.angle * Math.PI / 180;
   const cosine = Math.cos(radians);
   const sine = Math.sin(radians);
-  const darkLuminance = colorLuminance(inkColor(label.kind, 'dark'));
-  const lightLuminance = colorLuminance(inkColor(label.kind, 'light'));
+  const darkLuminance = colorLuminance(inkColor(label.kind, 'dark', palette));
+  const lightLuminance = colorLuminance(inkColor(label.kind, 'light', palette));
   const dark: number[] = [];
   const light: number[] = [];
+  const darkOpacity: number[] = [];
+  const lightOpacity: number[] = [];
+  const target = labelTargetContrast(label.fontSize);
   // Sample the rotated text footprint, rather than just its center. The low
   // contrast quartile discounts narrow contour lines without ignoring a dark
   // stretch that crosses several letters.
@@ -71,17 +113,25 @@ export const labelInkContrast = (
       const background = field.luminance[cellY * field.width + cellX];
       dark.push(contrast(background, darkLuminance));
       light.push(contrast(background, lightLuminance));
+      darkOpacity.push(contrastOpacity(background, darkLuminance, target));
+      lightOpacity.push(contrastOpacity(background, lightLuminance, target));
     }
   }
   dark.sort((a, b) => a - b);
   light.sort((a, b) => a - b);
   const lowQuartile = Math.floor((dark.length - 1) * 0.25);
-  return { dark: dark[lowQuartile], light: light[lowQuartile] };
+  darkOpacity.sort((a, b) => a - b);
+  lightOpacity.sort((a, b) => a - b);
+  const highQuartile = dark.length - 1 - lowQuartile;
+  return {
+    dark: dark[lowQuartile], light: light[lowQuartile],
+    darkOpacity: darkOpacity[highQuartile], lightOpacity: lightOpacity[highQuartile],
+  };
 };
 
 export const updateLabelInk = (
   current: InkState | undefined,
-  measured: { dark: number; light: number },
+  measured: InkMeasurement,
 ): InkState => {
   // Keep the established ink while it remains legible. A locally better
   // alternative is not a reason to recolor a drifting inscription.
@@ -95,15 +145,26 @@ export const updateLabelInk = (
   const switchInk = weakSamples >= 5;
   if (switchInk) mode = mode === 'dark' ? 'light' : 'dark';
   return {
-    mode, darkContrast, lightContrast, weakSamples: switchInk ? 0 : weakSamples,
-    opacity: mode === 'dark' ? clamp(0.82 + (5 - darkContrast) * 0.06, 0.82, 1) : 1,
+    ...measured, mode, darkContrast, lightContrast, weakSamples: switchInk ? 0 : weakSamples,
   };
 };
 
-export const advanceInkOpacity = (current: number | undefined, target: number, seconds: number): number => (
-  current === undefined ? target
-    : current + (target - current) * (1 - Math.exp(-clamp(seconds, 0, 0.5) / 0.8))
-);
+export const advanceInkOpacity = (
+  current: InkOpacity | undefined, target: number, seconds: number,
+): InkOpacity => {
+  if (!current) return { value: target, velocity: 0 };
+  // A critically damped spring eases both ends and preserves velocity when
+  // the background, size, or selected ink changes during an existing ease.
+  const dt = clamp(seconds, 0, 1 / 60);
+  const frequency = 5;
+  const offset = current.value - target;
+  const motion = current.velocity + frequency * offset;
+  const decay = Math.exp(-frequency * dt);
+  return {
+    value: target + (offset + motion * dt) * decay,
+    velocity: (current.velocity - frequency * motion * dt) * decay,
+  };
+};
 
 export const advanceInkTransition = (
   current: InkTransition | undefined,

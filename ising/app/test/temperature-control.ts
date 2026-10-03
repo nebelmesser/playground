@@ -47,6 +47,26 @@ for (const direction of [-1, 1] as const) {
     'temperature traversed its range too quickly');
   const end = trace(direction, 1 / 60, 30).at(-1)!;
   assert(end === (direction < 0 ? min : max), 'temperature passed its limit');
+
+  const target = direction < 0 ? min : max;
+  for (const duration of [0.5, 4, 8, 20]) {
+    const at = (fraction: number): number => advanceHeldTemperature(base, direction, 0, duration * fraction, min, max, duration);
+    assert(Math.abs(at(0.5) - (base + target) / 2) < 1e-10, 'half the duration must reach half the distance');
+    assert(at(1) === target && at(2) === target, 'configured duration must reach and stop at the limit');
+    const firstQuarter = Math.abs(at(0.25) - base);
+    const middleQuarter = Math.abs(at(0.5) - at(0.25));
+    const lastQuarter = Math.abs(at(1) - at(0.75));
+    assert(firstQuarter < middleQuarter && Math.abs(firstQuarter - lastQuarter) < 1e-10,
+      'S-curve must accelerate then decelerate symmetrically');
+    let fine = base;
+    for (let frame = 0; frame < 90; frame += 1) {
+      fine = advanceHeldTemperature(fine, direction, frame * duration / 120, duration / 120, min, max, duration);
+    }
+    assert(Math.abs(fine - at(0.75)) < 1e-10, 'configured curve depends on frame rate');
+  }
+  const half = advanceHeldTemperature(base, direction, 0, 4, min, max, 8);
+  const reversed = advanceHeldTemperature(half, direction === 1 ? -1 : 1, 0, 1 / 60, min, max, 8);
+  assert(Math.abs(reversed - half) < 0.001, 'changing direction must begin gently at the current temperature');
 }
 
 console.log('temperature ramp and progress ok');

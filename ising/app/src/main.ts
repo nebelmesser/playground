@@ -1,10 +1,11 @@
 import './style.css';
+import { cssColor, readUrlOptions } from './url-options';
 import { requestGpu } from './gpu/device';
 import { GpuIsing, type CursorState } from './gpu/ising';
 import {
   advanceInkOpacity, advanceInkTransition, blendedInkColor, inkTransitionFrame, labelInkContrast,
-  updateLabelInk,
-  type InkState, type InkTransition, type LuminanceField,
+  updateLabelInk, createInkPalette,
+  type InkState, type InkTransition, type InkOpacity, type LuminanceField,
 } from './label-ink';
 import { labelPositions, PlaceTracker, type LabelMode, type PlaceLabel } from './place-engine';
 import { advanceLabelText, labelTextFrame, type LabelTextTransition } from './label-text';
@@ -61,7 +62,11 @@ async function main(): Promise<void> {
     return;
   }
 
-  const simulation = new GpuIsing(gpu.device, gpu.format, canvas);
+  const options = readUrlOptions(window.location.search);
+  const inkPalette = createInkPalette(options);
+  document.documentElement.style.setProperty('--hot', cssColor(options.terrainColor));
+  document.documentElement.style.setProperty('--cold', cssColor(options.waterColor));
+  const simulation = new GpuIsing(gpu.device, gpu.format, canvas, options);
   let temperature = Number(temperatureInput.value);
   let baseTemperature = temperature;
   let scale = Number(scaleInput.value);
@@ -71,7 +76,8 @@ async function main(): Promise<void> {
   let paused = false;
   let settingsOpen = false;
   let painting = false;
-  let forceHotBrush = false;
+  let fallbackBrushSpin = 0;
+  let brushInverted = false;
   let pointerActive = false;
   let pointerX = 0;
   let pointerY = 0;
@@ -99,7 +105,7 @@ async function main(): Promise<void> {
   const reducedTextMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const labelInk = new Map<number, InkState>();
   const labelInkMotion = new Map<number, InkTransition>();
-  const labelInkOpacity = new Map<number, number>();
+  const labelInkOpacity = new Map<number, InkOpacity>();
   let labelLight: LuminanceField | null = null;
   let lightVersion = 0;
   const labelLightVersions = new Map<number, number>();
@@ -198,7 +204,8 @@ async function main(): Promise<void> {
   const cursorState = (): CursorState => ({
     active: pointerActive && !pinchActive && !touchGestureHadPinch,
     painting,
-    forceHot: forceHotBrush,
+    fallbackSpin: fallbackBrushSpin,
+    inverted: brushInverted,
     x: pointerX,
     y: pointerY,
     radius: brushDiameter / 2,
@@ -230,15 +237,19 @@ async function main(): Promise<void> {
     for (const label of labels) {
       seen.add(label.id);
       if (labelLight && labelLightVersions.get(label.id) !== lightVersion) {
-        const measured = labelInkContrast(label, labelLight, viewport);
+        const measured = labelInkContrast(label, labelLight, viewport, inkPalette);
         labelInk.set(label.id, updateLabelInk(labelInk.get(label.id), measured));
         labelLightVersions.set(label.id, lightVersion);
       }
       const inkMotion = advanceInkTransition(labelInkMotion.get(label.id), labelInk.get(label.id)?.mode ?? 'dark', seconds);
       labelInkMotion.set(label.id, inkMotion);
       const inkFrame = inkTransitionFrame(inkMotion);
-      const color = blendedInkColor(label.kind, inkMotion.from, inkMotion.to, inkFrame.blend);
-      const opacity = advanceInkOpacity(labelInkOpacity.get(label.id), labelInk.get(label.id)?.opacity ?? 1, seconds);
+      const color = blendedInkColor(label.kind, inkMotion.from, inkMotion.to, inkFrame.blend, inkPalette);
+      const ink = labelInk.get(label.id);
+      const fromOpacity = ink?.[inkMotion.from === 'dark' ? 'darkOpacity' : 'lightOpacity'] ?? 1;
+      const toOpacity = ink?.[inkMotion.to === 'dark' ? 'darkOpacity' : 'lightOpacity'] ?? 1;
+      const targetOpacity = fromOpacity + (toOpacity - fromOpacity) * inkFrame.blend;
+      const opacity = advanceInkOpacity(labelInkOpacity.get(label.id), targetOpacity, seconds);
       labelInkOpacity.set(label.id, opacity);
       const spots = labelPositions(label);
       const textMotion = advanceLabelText(labelTextMotion.get(label.id), label.text, seconds, reducedTextMotion.matches);
@@ -280,7 +291,7 @@ async function main(): Promise<void> {
           rendering.previous = null;
         }
         node.style.color = color;
-        node.style.opacity = (label.opacity * opacity).toFixed(3);
+        node.style.opacity = (label.opacity * opacity.value).toFixed(4);
         node.style.fontSize = `${label.fontSize.toFixed(2)}px`;
         node.style.letterSpacing = `${label.letterSpacing.toFixed(2)}px`;
         node.style.transform = `translate(${spot.x.toFixed(2)}px, ${spot.y.toFixed(2)}px) rotate(${label.angle.toFixed(2)}deg) translate(-50%, -50%)`;
@@ -330,7 +341,15 @@ async function main(): Promise<void> {
     };
   };
 
+  const updateBrushModifier = (event: { metaKey: boolean; ctrlKey: boolean }): void => {
+    const inverted = event.metaKey || event.ctrlKey;
+    if (brushInverted === inverted) return;
+    brushInverted = inverted;
+    renderDirty = true;
+  };
+
   const paintTo = (event: PointerEvent, select: boolean): void => {
+    updateBrushModifier(event);
     const point = pointerPoint(event);
     if (!point) {
       lastPaintPoint = null;
@@ -344,7 +363,8 @@ async function main(): Promise<void> {
       point.y,
       brushDiameter * simulation.density / 2,
       select,
-      forceHotBrush,
+      fallbackBrushSpin,
+      brushInverted,
     );
     lastPaintPoint = point;
     renderDirty = true;
@@ -354,7 +374,6 @@ async function main(): Promise<void> {
     painting = true;
     lastPaintPoint = null;
     paintTo(event, true);
-    forceHotBrush = false;
   };
 
   const pointerDistance = (): number => {
@@ -371,9 +390,9 @@ async function main(): Promise<void> {
       if (generation !== statsGeneration) return;
       magnetizationValue.textContent = stats.magnetization.toFixed(3);
       energyValue.textContent = stats.energy.toFixed(3);
-      const allBlue = stats.signedMagnetization === -1;
-      if (!painting && forceHotBrush !== allBlue) {
-        forceHotBrush = allBlue;
+      const fallback = Math.abs(stats.visibleMagnetization) === 1 ? -stats.visibleMagnetization : 0;
+      if (!painting && fallbackBrushSpin !== fallback) {
+        fallbackBrushSpin = fallback;
         renderDirty = true;
       }
     }).catch((error: unknown) => {
@@ -467,7 +486,9 @@ async function main(): Promise<void> {
   showLabelsInput.addEventListener('change', updateLabelsVisibility);
   updateLabelsVisibility();
 
+  window.addEventListener('keyup', updateBrushModifier);
   window.addEventListener('keydown', (event) => {
+    updateBrushModifier(event);
     if (event.code !== 'BracketLeft' && event.code !== 'BracketRight') return;
     event.preventDefault();
     brushDiameter = Math.max(4, Math.min(100, brushDiameter + (event.code === 'BracketLeft' ? -4 : 4)));
@@ -494,8 +515,7 @@ async function main(): Promise<void> {
   document.addEventListener('click', (event) => {
     const target = event.target;
     if (!settingsOpen || !(target instanceof Node) || settingsToggle.contains(target)) return;
-    if (!settingsPanel.contains(target)
-      || (target instanceof Element && target.closest('button'))) setSettingsOpen(false);
+    if (!settingsPanel.contains(target)) setSettingsOpen(false);
   });
 
   pauseButton.addEventListener('click', () => {
@@ -509,7 +529,7 @@ async function main(): Promise<void> {
 
   restartButton.addEventListener('click', () => {
     simulation.randomize();
-    forceHotBrush = false;
+    fallbackBrushSpin = 0;
     stepAccumulator = 0;
     statsGeneration += 1;
     resetPlaces();
@@ -522,7 +542,7 @@ async function main(): Promise<void> {
 
   clearBlueButton.addEventListener('click', () => {
     simulation.clearBlue();
-    forceHotBrush = true;
+    fallbackBrushSpin = 1;
     stepAccumulator = 0;
     statsGeneration += 1;
     resetPlaces();
@@ -533,7 +553,9 @@ async function main(): Promise<void> {
     requestStats();
   });
 
+  canvas.addEventListener('contextmenu', (event) => event.preventDefault());
   canvas.addEventListener('pointerdown', (event) => {
+    updateBrushModifier(event);
     const point = pointerPoint(event);
     if (!point) return;
     canvas.setPointerCapture(event.pointerId);
@@ -561,6 +583,7 @@ async function main(): Promise<void> {
   });
 
   canvas.addEventListener('pointermove', (event) => {
+    updateBrushModifier(event);
     pointerPoint(event);
     pointerActive = true;
     renderDirty = true;
@@ -608,6 +631,7 @@ async function main(): Promise<void> {
     lastPaintPoint = null;
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
     renderDirty = true;
+    drawNow();
     requestStats();
   };
 
@@ -621,7 +645,8 @@ async function main(): Promise<void> {
     pinchActive = false;
     renderDirty = true;
   });
-  canvas.addEventListener('pointerenter', () => {
+  canvas.addEventListener('pointerenter', (event) => {
+    updateBrushModifier(event);
     pointerActive = true;
     renderDirty = true;
   });
@@ -640,6 +665,7 @@ async function main(): Promise<void> {
   }, { passive: false });
 
   window.addEventListener('blur', () => {
+    brushInverted = false;
     painting = false;
     pointerActive = false;
     lastPaintPoint = null;
@@ -707,6 +733,7 @@ async function main(): Promise<void> {
       temperature = advanceHeldTemperature(
         temperature, temperatureDirection as -1 | 1,
         temperatureHoldSeconds, deltaSeconds, MIN_TEMPERATURE, MAX_TEMPERATURE,
+        options.temperatureDuration,
       );
       temperatureHoldSeconds += deltaSeconds;
       updateTemperatureInterface();

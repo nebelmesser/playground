@@ -1,9 +1,11 @@
 import shaderSource from './ising.wgsl?raw';
+import { DEFAULT_OPTIONS, type IsingOptions } from '../url-options';
 
 export type CursorState = {
   active: boolean;
   painting: boolean;
-  forceHot: boolean;
+  fallbackSpin: number;
+  inverted: boolean;
   x: number;
   y: number;
   radius: number;
@@ -13,6 +15,7 @@ export type IsingStats = {
   energy: number;
   magnetization: number;
   signedMagnetization: number;
+  visibleMagnetization: number;
 };
 
 type Pipelines = {
@@ -112,7 +115,7 @@ export class GpuIsing {
   private lastBlurRadius = -1;
   private lastSecondaryRadius = -1;
 
-  constructor(device: GPUDevice, format: GPUTextureFormat, canvas: HTMLCanvasElement) {
+  constructor(device: GPUDevice, format: GPUTextureFormat, canvas: HTMLCanvasElement, options: IsingOptions = DEFAULT_OPTIONS) {
     this.device = device;
     this.format = format;
     this.canvas = canvas;
@@ -127,8 +130,12 @@ export class GpuIsing {
     });
 
     const module = device.createShaderModule({ label: 'Ising shaders', code: shaderSource });
+    const paletteConstants = {
+      terrain_r: options.terrainColor[0], terrain_g: options.terrainColor[1], terrain_b: options.terrainColor[2],
+      water_r: options.waterColor[0], water_g: options.waterColor[1], water_b: options.waterColor[2],
+    };
     this.pipelines = {
-      randomize: device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'randomize' } }),
+      randomize: device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'randomize', constants: { start_terrain: options.startTerrain } } }),
       clearBlue: device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'clear_blue' } }),
       resize: device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'resize_grid' } }),
       update: device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'metropolis' } }),
@@ -139,11 +146,11 @@ export class GpuIsing {
       select: device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'select_spin' } }),
       paint: device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'paint' } }),
       stats: device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'reduce_stats' } }),
-      regions: device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'sample_regions' } }),
+      regions: device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'sample_regions', constants: paletteConstants } }),
       render: device.createRenderPipeline({
         layout: 'auto',
         vertex: { module, entryPoint: 'fullscreen_vertex' },
-        fragment: { module, entryPoint: 'field_fragment', targets: [{ format }] },
+        fragment: { module, entryPoint: 'field_fragment', constants: paletteConstants, targets: [{ format }] },
         primitive: { topology: 'triangle-list' },
       }),
     };
@@ -316,7 +323,8 @@ export class GpuIsing {
     endY: number,
     radius: number,
     select: boolean,
-    forceHot: boolean,
+    fallbackSpin: number,
+    inverted: boolean,
   ): void {
     const minX = Math.floor(Math.min(startX, endX) - radius);
     const minY = Math.floor(Math.min(startY, endY) - radius);
@@ -324,7 +332,7 @@ export class GpuIsing {
     const maxY = Math.ceil(Math.max(startY, endY) + radius);
     const extentX = maxX - minX + 1;
     const extentY = maxY - minY + 1;
-    this.writeBrushParams(minX, minY, extentX, extentY, startX, startY, endX, endY, radius, forceHot);
+    this.writeBrushParams(minX, minY, extentX, extentY, startX, startY, endX, endY, radius, fallbackSpin, inverted);
 
     const encoder = this.device.createCommandEncoder({ label: 'Paint Ising spins' });
     if (select) {
@@ -422,7 +430,7 @@ export class GpuIsing {
     const output = this.statsOutput;
     const readback = this.statsReadback;
     const group = this.statsGroups[this.currentIndex];
-    if (!output || !readback || !group) return { energy: 0, magnetization: 0, signedMagnetization: 0 };
+    if (!output || !readback || !group) return { energy: 0, magnetization: 0, signedMagnetization: 0, visibleMagnetization: 0 };
 
     const groupsX = workgroups(this.width, 16);
     const groupsY = workgroups(this.height, 16);
@@ -436,18 +444,20 @@ export class GpuIsing {
     pass.setBindGroup(0, group);
     pass.dispatchWorkgroups(groupsX, groupsY);
     pass.end();
-    encoder.copyBufferToBuffer(output, 0, readback, 0, 8);
+    encoder.copyBufferToBuffer(output, 0, readback, 0, 12);
     this.device.queue.submit([encoder.finish()]);
 
     await readback.mapAsync(GPUMapMode.READ);
     const values = new Int32Array(readback.getMappedRange());
     const magnetization = values[0];
     const energy = values[1];
+    const visibleMagnetization = values[2];
     readback.unmap();
     const count = this.width * this.height;
     return {
       magnetization: Math.abs(magnetization / count),
       signedMagnetization: magnetization / count,
+      visibleMagnetization: visibleMagnetization / count,
       energy: energy / count,
     };
   }
@@ -489,12 +499,12 @@ export class GpuIsing {
 
     this.statsOutput = this.device.createBuffer({
       label: 'Ising statistics accumulator',
-      size: 8,
+      size: 12,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
     });
     this.statsReadback = this.device.createBuffer({
       label: 'Ising statistics readback',
-      size: 8,
+      size: 12,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
     this.createBindGroups();
@@ -556,6 +566,7 @@ export class GpuIsing {
         { binding: 0, resource: { buffer } },
         { binding: 6, resource: { buffer: this.statsOutput! } },
         { binding: 7, resource: { buffer: this.statsUniform } },
+        { binding: 15, resource: this.blurViews![1] },
       ],
     }));
     this.blurPrimaryHorizontalGroups = this.spinBuffers.map((buffer) => this.device.createBindGroup({
@@ -681,7 +692,8 @@ export class GpuIsing {
     endX: number,
     endY: number,
     radius: number,
-    forceHot: boolean,
+    fallbackSpin: number,
+    inverted: boolean,
   ): void {
     const bytes = new ArrayBuffer(64);
     const view = new DataView(bytes);
@@ -691,7 +703,8 @@ export class GpuIsing {
     view.setInt32(12, offsetY, true);
     view.setUint32(16, extentX, true);
     view.setUint32(20, extentY, true);
-    view.setUint32(24, forceHot ? 1 : 0, true);
+    view.setInt32(24, fallbackSpin, true);
+    view.setUint32(28, inverted ? 1 : 0, true);
     view.setFloat32(32, startX, true);
     view.setFloat32(36, startY, true);
     view.setFloat32(40, endX, true);
@@ -785,9 +798,10 @@ export class GpuIsing {
     values[9] = cursor.y * this.density;
     values[10] = cursor.radius * this.density;
     values[11] = cursor.painting ? 1 : 0;
-    values[12] = cursor.forceHot ? 1 : 0;
+    values[12] = cursor.fallbackSpin;
     values[13] = Math.max(0.5, this.density * 0.5);
     values[14] = mapStrength;
+    values[15] = cursor.inverted ? 1 : 0;
     this.device.queue.writeBuffer(this.renderUniform, 0, values);
   }
 

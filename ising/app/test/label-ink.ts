@@ -1,15 +1,16 @@
 import {
   advanceInkOpacity, advanceInkTransition, blendedInkColor, inkColor, inkTransitionFrame,
-  labelInkContrast, updateLabelInk,
-  type InkState,
+  labelInkContrast, updateLabelInk, colorLuminance, contrastOpacity, labelTargetContrast,
+  createInkPalette, type InkState,
 } from '../src/label-ink.ts';
+import { readUrlOptions } from '../src/url-options.ts';
 
 const assert = (condition: boolean, message: string): void => {
   if (!condition) throw new Error(message);
 };
 
 const viewport = { width: 400, height: 400 };
-const label = { kind: 'island' as const, x: 200, y: 200, width: 180, height: 16, angle: 0 };
+const label = { kind: 'island' as const, x: 200, y: 200, width: 180, height: 16, fontSize: 16, angle: 0 };
 const uniform = (luminance: number) => ({
   width: 100, height: 100, luminance: new Float32Array(100 * 100).fill(luminance),
 });
@@ -26,12 +27,64 @@ const blue = choose(0.318);
 assert(neutral.mode === 'light' && neutral.lightContrast > 12, 'neutral field needs readable light ink');
 assert(orange.mode === 'dark' && orange.darkContrast > 5, 'bright orange needs dark ink');
 assert(blue.mode === 'dark' && blue.darkContrast > 5, 'bright blue needs dark ink');
-assert(inkColor('island', 'dark') === '#050302', 'land dark ink is no longer black');
-assert(inkColor('island', 'light') === '#ffd5a6', 'dark land needs light orange, never white');
-assert(inkColor('lake', 'dark') === '#06132e', 'bright water needs dark blue');
-assert(inkColor('lake', 'light') === '#c4eaff', 'dark water needs light blue');
-assert(orange.opacity < neutral.opacity && orange.opacity >= 0.82,
-  'dark ink should soften only on a high-contrast background');
+// Check the derivation across saturated colors and neutral endpoints without
+// tying it to the former hard-coded orange/blue label colors.
+for (const hex of ['000000', 'ffffff', '808080', 'ff0000', '00ff00', '0000ff', 'ffff00', '00ffff', 'ff00ff', '55cc66', '6633cc']) {
+  const palette = createInkPalette(readUrlOptions(`?terrain_color=${hex}&water_color=${hex}`));
+  for (const mode of ['dark', 'light'] as const) {
+    const ink = inkColor('island', mode, palette);
+    assert(ink === inkColor('lake', mode, palette), 'identical area colors must produce identical inks');
+    assert(/^#[0-9a-f]{6}$/.test(ink), `invalid derived color: ${ink}`);
+    const channels = [1, 3, 5].map(offset => parseInt(ink.slice(offset, offset + 2), 16));
+    const source = [0, 2, 4].map(offset => parseInt(hex.slice(offset, offset + 2), 16));
+    for (let i = 0; i < 3; i += 1) {
+      for (let j = 0; j < 3; j += 1) {
+        assert((channels[i] - channels[j]) * (source[i] - source[j]) >= 0, 'ink changed hue channel order');
+        if (source[i] === source[j]) assert(channels[i] === channels[j], 'neutral acquired a color cast');
+      }
+    }
+  }
+  for (let step = 0; step <= 100; step += 1) {
+    const measured = labelInkContrast(label, uniform(step / 100), viewport, palette);
+    assert(Math.max(measured.dark, measured.light) > 3.7, `ink loses contrast for ${hex} at ${step}% luminance`);
+  }
+}
+const custom = createInkPalette(readUrlOptions('?terrain_color=55cc66&water_color=6633cc'));
+assert(custom.land.dark !== custom.water.dark && custom.land.light !== custom.water.light,
+  'area colors did not reach their respective label inks');
+assert(labelInkContrast(label, uniform(0.15), viewport, custom).dark
+  !== labelInkContrast(label, uniform(0.15), viewport).dark, 'contrast calculation ignored the custom inks');
+const rgbChannels = (hex: string) => [1, 3, 5].map(offset => parseInt(hex.slice(offset, offset + 2), 16));
+for (const blend of [0, 0.25, 0.5, 0.75, 1]) {
+  const css = blendedInkColor('lake', 'dark', 'light', blend, custom);
+  const channels = [...css.matchAll(/\d+(?:\.\d+)?/g)].map(match => Number(match[0]));
+  const from = rgbChannels(custom.water.dark);
+  const to = rgbChannels(custom.water.light);
+  assert(channels.every((channel, i) => Math.abs(channel - (from[i] + (to[i] - from[i]) * blend)) < 0.01),
+    'color transition used a different palette from contrast calculation');
+}
+assert(orange.darkOpacity < 0.82 && neutral.lightOpacity < 0.65,
+  'both light and dark ink must soften when the background provides ample contrast');
+for (const kind of ['island', 'lake'] as const) {
+  for (const mode of ['dark', 'light'] as const) {
+    const background = mode === 'dark' ? 0.317 : 0.008;
+    const ink = colorLuminance(inkColor(kind, mode));
+    let previous = 1;
+    for (const fontSize of [8, 16, 24, 40, 64]) {
+      const measured = labelInkContrast({ ...label, kind, fontSize }, uniform(background), viewport);
+      const opacity = measured[mode === 'dark' ? 'darkOpacity' : 'lightOpacity'];
+      assert(opacity < previous, `${kind} ${mode}: larger text should be paler`);
+      previous = opacity;
+      const encode = (v: number) => v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055;
+      const encoded = encode(background) * (1 - opacity) + encode(ink) * opacity;
+      const luminance = encoded <= 0.04045 ? encoded / 12.92 : ((encoded + 0.055) / 1.055) ** 2.4;
+      const ratio = (Math.max(background, luminance) + 0.05) / (Math.min(background, luminance) + 0.05);
+      assert(Math.abs(ratio - labelTargetContrast(fontSize)) < 0.001,
+        `${kind} ${mode} did not meet the shared composited contrast target`);
+    }
+  }
+}
+assert(contrastOpacity(0.1, 0.1, 2) === 1, 'equal luminance must not produce invalid alpha');
 for (const size of [16, 64, 256]) {
   const field = { width: size, height: size, luminance: new Float32Array(size * size).fill(0.317) };
   assert(updateLabelInk(undefined, labelInkContrast(label, field, viewport)).mode === 'dark',
@@ -68,15 +121,32 @@ for (let sample = 0; sample < 4; sample += 1) {
 for (let sample = 0; sample < 8; sample += 1) state = choose(0.317, state);
 assert(state.mode === 'dark', 'ink failed to recover after the background became bright');
 
-let opacity = orange.opacity;
+let opacity = advanceInkOpacity(undefined, 0.25, 0);
 let largestAlphaStep = 0;
-for (let frame = 0; frame < 120; frame += 1) {
-  const next = advanceInkOpacity(opacity, neutral.opacity, 1 / 60);
-  largestAlphaStep = Math.max(largestAlphaStep, Math.abs(next - opacity));
+let firstAlphaStep = 0;
+let lastAlphaStep = 0;
+for (let frame = 0; frame < 180; frame += 1) {
+  const next = advanceInkOpacity(opacity, 0.85, 1 / 60);
+  const step = Math.abs(next.value - opacity.value);
+  if (frame === 0) firstAlphaStep = step;
+  lastAlphaStep = step;
+  largestAlphaStep = Math.max(largestAlphaStep, step);
   opacity = next;
 }
-assert(largestAlphaStep < 0.01 && Math.abs(opacity - neutral.opacity) < 0.02,
+assert(largestAlphaStep < 0.02 && Math.abs(opacity.value - 0.85) < 0.001,
   `ink opacity did not ease (${largestAlphaStep.toFixed(3)} per frame)`);
+assert(firstAlphaStep < largestAlphaStep * 0.3 && lastAlphaStep < largestAlphaStep * 0.3,
+  'opacity must ease in and out');
+for (let frame = 0; frame < 18; frame += 1) opacity = advanceInkOpacity(opacity, 0.25, 1 / 60);
+const retarget = advanceInkOpacity(opacity, 0.9, 0);
+assert(retarget.value === opacity.value && retarget.velocity === opacity.velocity,
+  'retargeting opacity must preserve both value and velocity');
+for (let frame = 0; frame < 240; frame += 1) {
+  const next = advanceInkOpacity(opacity, frame < 60 ? 0.9 : 0.2, frame % 2 ? 0.5 : 1 / 60);
+  assert(Math.abs(next.value - opacity.value) < 0.025 && next.value >= 0 && next.value <= 1,
+    'opacity jerked or overshot after retargeting / a stalled frame');
+  opacity = next;
+}
 
 const diagonalField = uniform(0.008);
 for (let y = 0; y < 100; y += 1) {

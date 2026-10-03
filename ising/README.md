@@ -26,10 +26,32 @@ playground at `http://127.0.0.1:4000/ising/`.
   pointer position on the current observation scale.
 - `[` and `]` change brush size up to 100 px.
 - Time speed changes the number of checkerboard Metropolis half-steps per
-  second from 1× to 10× without changing the temperature.
+  second from 0.5× to 10× without changing the temperature (default 1×).
 - New state writes independent random ±1 spins without a warm-up delay.
-- Clear fills the field with blue spins; the next brush stroke defaults to
-  orange while the field remains entirely blue.
+- Clear fills the field with water (−1) spins. On a single-color map the brush
+  automatically paints the opposite domain; Cmd/Ctrl inverts the brush.
+
+## URL options
+
+Example: `/ising/?start_terrain=40&terrain_color=ff693d&water_color=369cff`.
+
+- `start_terrain`: initial percentage of +1 terrain spins, from 0 to 100
+  (decimals allowed; default 47). Applies only at startup and on New random
+  state. The simulation evolves freely afterward; newly added cells on resize
+  still use 50/50 noise. These are independent probabilities, not exact quotas.
+- `terrain_color` and `water_color`: base colors in three- or six-digit RGB hex.
+  Omit `#`, or encode it as `%23` in the URL. Without overrides, the original
+  orange/blue palette remains. Shading and contours still apply to these colors.
+  Land isolines use a darker shade of `terrain_color`.
+  Label inks are derived from each area's base color, with a dark shade and a
+  light tint; contrast and opacity adapt to the background and text size.
+- `temperature_duration`: seconds of holding Cool or Heat to reach the
+  corresponding temperature limit (positive number; default 8). Temperature
+  follows an S-curve: slow at both ends, fastest in the middle. For example,
+  `?temperature_duration=4` makes the change twice as fast. The fill shows actual
+  temperature progress, with a straight front clipped inside the arrow.
+
+Missing or invalid parameters fall back to their defaults independently.
 
 ## License
 

@@ -59,7 +59,6 @@ input { font: inherit; }
   top: 0;
   left: 0;
   margin: 0;
-  color: #050302;
   font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
   font-weight: 500;
   font-kerning: none;
@@ -76,7 +75,6 @@ input { font: inherit; }
 
 .place-label[data-kind="lake"] {
   font-style: italic;
-  color: #06132e;
 }
 
 .panel {
@@ -276,8 +274,6 @@ input[type="range"]::-moz-range-thumb {
 
 .actions button[aria-pressed="true"] .play-icon { display: block; }
 
-.actions .clear-button { color: var(--cold); }
-
 .actions button:hover,
 .settings-toggle:hover { background: rgba(255, 255, 255, 0.09); }
 
@@ -386,7 +382,7 @@ input[type="range"]::-moz-range-thumb {
   fill: var(--paddle-fill);
   stroke: rgba(243, 240, 232, 0.9);
   stroke-width: 2.5;
-  stroke-linejoin: round;
+  stroke-linejoin: miter;
   vector-effect: non-scaling-stroke;
 }
 
@@ -394,11 +390,17 @@ input[type="range"]::-moz-range-thumb {
   position: absolute;
   z-index: -1;
   inset: 2px;
-  background: var(--paddle-progress-color);
   opacity: 0;
-  transform: scaleX(var(--paddle-progress, 0));
   transition: opacity 100ms ease;
   pointer-events: none;
+}
+
+.paddle-progress::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--paddle-progress-color);
+  transform: scaleX(var(--paddle-progress, 0));
 }
 
 .temperature-paddle .paddle-progress { opacity: 1; }
@@ -441,14 +443,14 @@ input[type="range"]::-moz-range-thumb {
   --paddle-progress-color: rgba(83, 176, 255, 0.72);
 }
 
-.cool-paddle .paddle-progress { transform-origin: right center; }
+.cool-paddle .paddle-progress::before { transform-origin: right center; }
 
 .heat-paddle {
   --paddle-fill: rgba(181, 49, 31, 0.95);
   --paddle-progress-color: rgba(255, 119, 73, 0.75);
 }
 
-.heat-paddle .paddle-progress { transform-origin: left center; }
+.heat-paddle .paddle-progress::before { transform-origin: left center; }
 
 .rough-paddle,
 .smooth-paddle {

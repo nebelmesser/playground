@@ -1,3 +1,11 @@
+override start_terrain: f32 = 0.47;
+override terrain_r: f32 = 1.0;
+override terrain_g: f32 = 0.412;
+override terrain_b: f32 = 0.239;
+override water_r: f32 = 0.212;
+override water_g: f32 = 0.612;
+override water_b: f32 = 1.0;
+
 struct SimParams {
   size: vec2<u32>,
   seed: u32,
@@ -12,8 +20,8 @@ struct BrushParams {
   size: vec2<u32>,
   offset: vec2<i32>,
   extent: vec2<u32>,
-  force_hot: u32,
-  _pad0: u32,
+  fallback_spin: i32,
+  invert: u32,
   start: vec2<f32>,
   end: vec2<f32>,
   radius: f32,
@@ -44,9 +52,10 @@ struct RenderParams {
   cursor: vec2<f32>,
   cursor_radius: f32,
   painting: f32,
-  force_hot_brush: f32,
+  fallback_brush_spin: f32,
   cursor_stroke_half_width: f32,
   map_strength: f32,
+  invert_brush: f32,
 }
 
 struct Selection {
@@ -56,6 +65,7 @@ struct Selection {
 struct StatsAccumulator {
   magnetization: atomic<i32>,
   energy: atomic<i32>,
+  visible_magnetization: atomic<i32>,
 }
 
 struct VertexOutput {
@@ -91,6 +101,7 @@ struct RegionParams {
 
 var<workgroup> group_magnetization: array<i32, 256>;
 var<workgroup> group_energy: array<i32, 256>;
+var<workgroup> group_visible_magnetization: array<i32, 256>;
 
 fn hash32(value: u32) -> u32 {
   var x = value;
@@ -105,6 +116,10 @@ fn random_unit(value: u32) -> f32 {
   return f32(hash32(value)) / 4294967296.0;
 }
 
+fn initial_spin(index: u32) -> i32 {
+  return select(-1, 1, start_terrain >= 1.0 || random_unit(index ^ sim.seed) < start_terrain);
+}
+
 fn wrap(value: i32, size: i32) -> u32 {
   return u32(((value % size) + size) % size);
 }
@@ -113,8 +128,7 @@ fn wrap(value: i32, size: i32) -> u32 {
 fn randomize(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (gid.x >= sim.size.x || gid.y >= sim.size.y) { return; }
   let index = gid.y * sim.size.x + gid.x;
-  let sample = hash32(index ^ sim.seed);
-  spins_write[index] = select(-1, 1, (sample & 1u) == 1u);
+  spins_write[index] = initial_spin(index);
 }
 
 @compute @workgroup_size(8, 8)
@@ -259,7 +273,7 @@ fn select_spin() {
   let x = min(u32(brush.start.x), brush.size.x - 1u);
   let y = min(u32(brush.start.y), brush.size.y - 1u);
   let visible_value = textureLoad(observed_field, vec2<i32>(i32(x), i32(y)), 0).r;
-  selection.value = select(-1, 1, brush.force_hot == 1u || visible_value >= 0.0);
+  selection.value = select(select(-1, 1, visible_value >= 0.0), brush.fallback_spin, brush.fallback_spin != 0);
 }
 
 @compute @workgroup_size(8, 8)
@@ -278,7 +292,7 @@ fn paint(@builtin(global_invocation_id) gid: vec3<u32>) {
 
   let x = wrap(i32(point.x), i32(brush.size.x));
   let y = wrap(i32(point.y), i32(brush.size.y));
-  spins_write[y * brush.size.x + x] = selection.value;
+  spins_write[y * brush.size.x + x] = select(selection.value, -selection.value, brush.invert != 0u);
 }
 
 @compute @workgroup_size(16, 16)
@@ -289,12 +303,14 @@ fn reduce_stats(
 ) {
   var magnetization = 0;
   var energy = 0;
+  var visible_magnetization = 0;
   if (gid.x < stats_params.width && gid.y < stats_params.height) {
     let index = gid.y * stats_params.width + gid.x;
     let spin = spins_read[index];
     let right_x = select(gid.x + 1u, 0u, gid.x + 1u == stats_params.width);
     let down_y = select(gid.y + 1u, 0u, gid.y + 1u == stats_params.height);
     magnetization = spin;
+    visible_magnetization = select(-1, 1, textureLoad(observed_field, vec2<i32>(gid.xy), 0).r >= 0.0);
     energy = -spin * (
       spins_read[gid.y * stats_params.width + right_x]
       + spins_read[down_y * stats_params.width + gid.x]
@@ -303,6 +319,7 @@ fn reduce_stats(
 
   group_magnetization[local_index] = magnetization;
   group_energy[local_index] = energy;
+  group_visible_magnetization[local_index] = visible_magnetization;
   workgroupBarrier();
 
   var stride = 128u;
@@ -310,6 +327,7 @@ fn reduce_stats(
     if (local_index < stride) {
       group_magnetization[local_index] += group_magnetization[local_index + stride];
       group_energy[local_index] += group_energy[local_index + stride];
+      group_visible_magnetization[local_index] += group_visible_magnetization[local_index + stride];
     }
     workgroupBarrier();
     if (stride == 1u) { break; }
@@ -319,6 +337,7 @@ fn reduce_stats(
   if (local_index == 0u) {
     atomicAdd(&stats_output.magnetization, group_magnetization[0]);
     atomicAdd(&stats_output.energy, group_energy[0]);
+    atomicAdd(&stats_output.visible_magnetization, group_visible_magnetization[0]);
   }
 }
 
@@ -337,8 +356,8 @@ fn fullscreen_vertex(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 
 fn palette(value: f32) -> vec3<f32> {
   let neutral = vec3<f32>(0.075, 0.086, 0.122);
-  let cold = vec3<f32>(0.212, 0.612, 1.0);
-  let hot = vec3<f32>(1.0, 0.412, 0.239);
+  let cold = vec3<f32>(water_r, water_g, water_b);
+  let hot = vec3<f32>(terrain_r, terrain_g, terrain_b);
   let target_color = select(cold, hot, value >= 0.0);
   return mix(neutral, target_color, pow(abs(value), 0.38));
 }
@@ -368,7 +387,7 @@ fn ring_band_mask(value: f32, center: f32, half_width: f32, antialias: f32) -> f
   return 1.0 - smoothstep(half_width, half_width + antialias, abs(value - center));
 }
 
-fn orange_isolines(value: f32) -> f32 {
+fn terrain_isolines(value: f32) -> f32 {
   let gradient = max(length(vec2<f32>(dpdx(value), dpdy(value))), 0.000001);
   let spacing = 0.28;
   let level = round(value / spacing) * spacing;
@@ -412,8 +431,9 @@ fn field_fragment(input: VertexOutput) -> @location(0) vec4<f32> {
   let microscopic = textureLoad(sampled_field, vec2<i32>(cell), 0).r * 2.0 - 1.0;
   var color = mix(palette(value), palette(microscopic), render_params.micro_opacity);
   if (render_params.map_strength > 0.004) {
-    let relief = orange_isolines(value);
-    color = mix(color, vec3<f32>(0.29, 0.1, 0.045), relief * render_params.map_strength * 0.22);
+    let relief = terrain_isolines(value);
+    let contour_color = vec3<f32>(terrain_r, terrain_g, terrain_b) * 0.28;
+    color = mix(color, contour_color, relief * render_params.map_strength * 0.22);
   }
 
   var edge = 0.0;
@@ -441,15 +461,16 @@ fn field_fragment(input: VertexOutput) -> @location(0) vec4<f32> {
     );
     let hovered_value = textureLoad(observed_field, vec2<i32>(cursor_cell), 0).r;
     var cursor_spin = select(-1.0, 1.0, hovered_value >= 0.0);
-    if (render_params.force_hot_brush > 0.5) {
-      cursor_spin = 1.0;
+    if (render_params.fallback_brush_spin != 0.0) {
+      cursor_spin = render_params.fallback_brush_spin;
     }
     if (render_params.painting > 0.5) {
       cursor_spin = f32(selection.value);
     }
+    if (render_params.invert_brush > 0.5) { cursor_spin = -cursor_spin; }
     let cursor_color = select(
-      vec3<f32>(0.212, 0.612, 1.0),
-      vec3<f32>(1.0, 0.412, 0.239),
+      vec3<f32>(water_r, water_g, water_b),
+      vec3<f32>(terrain_r, terrain_g, terrain_b),
       cursor_spin > 0.0,
     );
     let pixel = render_params.cursor_stroke_half_width * 2.0;
