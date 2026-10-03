@@ -1,10 +1,10 @@
 override start_terrain: f32 = 0.47;
 override terrain_r: f32 = 1.0;
-override terrain_g: f32 = 0.412;
-override terrain_b: f32 = 0.239;
-override water_r: f32 = 0.212;
-override water_g: f32 = 0.612;
-override water_b: f32 = 1.0;
+override terrain_g: f32 = 1.0;
+override terrain_b: f32 = 1.0;
+override water_r: f32 = 1.0 / 255.0;
+override water_g: f32 = 14.0 / 255.0;
+override water_b: f32 = 134.0 / 255.0;
 
 struct SimParams {
   size: vec2<u32>,

@@ -40,8 +40,9 @@ Example: `/ising/?start_terrain=40&terrain_color=ff693d&water_color=369cff`.
   state. The simulation evolves freely afterward; newly added cells on resize
   still use 50/50 noise. These are independent probabilities, not exact quotas.
 - `terrain_color` and `water_color`: base colors in three- or six-digit RGB hex.
-  Omit `#`, or encode it as `%23` in the URL. Without overrides, the original
-  orange/blue palette remains. Shading and contours still apply to these colors.
+  Omit `#`, or encode it as `%23` in the URL. Without overrides, the
+  defaults are white terrain (`FFF`) and deep blue water (`010E86`). Shading
+  and contours still apply to these colors.
   Land isolines use a darker shade of `terrain_color`.
   Label inks are derived from each area's base color, with a dark shade and a
   light tint; contrast and opacity adapt to the background and text size.

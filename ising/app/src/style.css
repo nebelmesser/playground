@@ -5,8 +5,8 @@
   --muted: #999da8;
   --hairline: rgba(255, 255, 255, 0.14);
   --panel: rgba(13, 16, 23, 0.84);
-  --hot: #ff6b45;
-  --cold: #57a3ff;
+  --hot: #fff;
+  --cold: #010e86;
   --noise-opacity: 0.025;
 }
 

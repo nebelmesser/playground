@@ -8,8 +8,8 @@ export type IsingOptions = {
 
 export const DEFAULT_OPTIONS: IsingOptions = {
   startTerrain: 0.47,
-  terrainColor: [1, 0.412, 0.239],
-  waterColor: [0.212, 0.612, 1],
+  terrainColor: [1, 1, 1],
+  waterColor: [1 / 255, 14 / 255, 134 / 255],
   temperatureDuration: 8,
 };
 
