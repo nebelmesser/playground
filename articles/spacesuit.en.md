@@ -1,0 +1,115 @@
+# A Spacesuit for the Abyss of Subjective Experience
+
+Rationalist criticism of esotericism usually comes down to checking facts. Cards don't predict the future, astrology doesn't describe personality, and instruments don't detect auras. All true — and almost beside the interesting point.
+
+What interests me more is how esotericism keeps mixing two different ways of knowing.
+
+One builds models of the world that we can test. The other connects the world to human experience through metaphors and systems of associations. Let's call them analytical and poetic.
+
+To the analytical eye, a thunderstorm is an atmospheric process: a difference in electric potential, a discharge, a shock wave. To the poetic eye, it is an image of tension, conflict, and release. One explains the event; the other lets us recognize our own experience in it.
+
+The trouble starts when the link between a storm and conflict stops being treated as a metaphor and becomes an objective law of nature.
+
+Much of esotericism rests on this switch.
+
+It promises access to a deeper, timeless truth that modern science has supposedly lost or is simply unable to see. This is where its special respect for antiquity comes from.
+
+Manuscripts, Kabbalah, alchemical diagrams, and astrological tables are treated as fragments of “original knowledge.” Their symbols really have outlived the theories that produced them. But esotericism takes the survival of those symbols as support for the whole system.
+
+If an alchemical image still describes human experience well, it is tempting to think the alchemical view of the world must have known something, too.
+
+The poetic precision of an old image hides the analytical failure of an old model.
+
+But there is an important detail here: ancient poetic thinking did not come from nowhere. It grew out of the best analytical tools of its time.
+
+The elements, planetary spheres, numbers, and geometric shapes were used both to describe the world and to make human sense of it.
+
+In antiquity, geometry was an advanced analytical tool. People used it to measure land and buildings, construct proofs, calculate proportions, and model the motion of heavenly bodies. A compass could literally reveal an order the eye could not see.
+
+That same order also received a poetic reading. The circle became an image of eternity, regular polyhedra became elements of the universe, and numerical ratios became cosmic harmony. Geometric necessity turned into a metaphor for cosmic order.
+
+Esotericism inherited these images but lost the method that produced them.
+
+It keeps the symbols of an earlier scientific frontier instead of looking for new ones at today's.
+
+So the question is not whether we need elements, planets, and alchemical weddings. It is why our poetic thinking still speaks the language of ancient science.
+
+Science has moved quite a way since then: quantum mechanics, chaos theory, fractal geometry, information theory, complex systems, neural networks.
+
+There is enough material here for new poetic thinking to blow any medieval alchemist's mind.
+
+Probabilistic states, strange attractors, phase transitions, emergence, latent spaces, multidimensional surfaces — all of these offer a new language for talking about fate, consciousness, freedom, order, and transformation.
+
+Yet modern esotericism barely notices the opportunity.
+
+It happily borrows scientific words: quantum fields, vibrations, fractals, energy-information structures. Usually, that is as far as it goes.
+
+The mathematics, method, and limits of a scientific concept are thrown away. But its poetic possibilities barely get used, either. The new word is simply stuck onto an old idea.
+
+That is how we get quantum healing, the fractal structure of fate, and the energetic vibrations of consciousness.
+
+The analytical side is gone, and the poetic side becomes decoration. Medieval magic gets quantum stickers.
+
+Meanwhile, modern science did something important: it drew a line between describing the world and interpreting it through symbols. Metaphor was rightly removed from proof.
+
+But there was a side effect.
+
+Science kept producing stranger and stranger pictures of reality, while the job of turning them into a language for human experience was left somewhere between philosophy and art. And art has no obligation to keep up with equations, laboratories, and new theories.
+
+As a result, our models of the world change faster than the cultural language we use to make sense of them.
+
+After all the misleading claims of esotericism, it is tempting to scrap the whole warehouse of symbols. But it is easy to throw away the task itself along with the junk.
+
+Esotericism fails mainly on the analytical side: it does a poor job of explaining how the world works.
+
+The poetic side has a different job: mapping subjective experience.
+
+Science can study fear, ecstasy, or the loss of a sense of self. It can observe, measure, compare people's accounts, and look for links to what happens in the body. But a scientific explanation of an experience does not replace the language a person uses to recognize and understand it.
+
+Mapping our inner lives calls for a different kind of precision.
+
+It needs the ability to tell states apart, see connections, and help us find our way, rather than the standards of proof used in physics. Metaphor is unavoidable here. The question is how much detail it can show.
+
+Traditional esotericism offers fairly low resolution.
+
+It tries to map the fine fabric of human experience with a dozen zodiac signs, chakras, elements, and a set of old archetypes. Medieval globes with dragons in the margins are used as modern navigation charts.
+
+And scientific discoveries are often stranger than the fantasies esoteric thinkers add to them.
+
+Chaos theory shows how a few simple, deterministic equations can produce almost endless complexity.
+
+Read analytically, this is sensitivity to initial conditions and a limit on practical prediction.
+
+Read poetically, it is almost a ready-made language for fate: the world can be fully governed by cause and effect without following a script we can read.
+
+No quantum mysticism is needed.
+
+The double pendulum is especially good because you can see all this happen. The laws of motion are known, and there is no randomness in the system. Yet a tiny change in the starting position eventually leads to a completely different path.
+
+Cause and effect remain. The ability to predict the future disappears.
+
+There is your mystical revelation, without replacing mathematics with magic.
+
+The Ising model offers another image.
+
+Many simple elements, each capable of almost nothing, together form structures that do not exist at the level of a single part. When conditions change, the whole system can suddenly rearrange itself.
+
+This is emergence: a property exists at one level of organization and makes no sense at another.
+
+It gives us material for thinking about identity, groups, society, consciousness, and transformation — much richer material than yet another diagram of seven chakras.
+
+The same goes for neural networks. High-dimensional feature spaces, unexpected internal representations, properties that emerge from huge numbers of simple operations: almost ideal material for a modern mythology.
+
+If we followed the spirit of alchemy rather than its letter, its heirs today would be working with GPU clusters instead of poring over old grimoires.
+
+They would explore phase transitions, chaotic systems, latent spaces, and the boundaries between model and observer. They would build new symbolic systems from today's knowledge instead of repainting old ones in quantum colors.
+
+Alchemists brought together the ideas about matter available to them, the craft of laboratory work, and a language of inner transformation.
+
+To inherit their work is to repeat that gesture at today's frontier.
+
+The tragedy of modern esotericism is not that it is too strange. If anything, it isn't strange enough.
+
+We have models of the world that make astrological spheres look like a child's globe. Yet to explore the abyss of subjective experience, we still put on a costume astrologer's robe.
+
+It is long past time to build a new spacesuit. That's what we'll be doing.
