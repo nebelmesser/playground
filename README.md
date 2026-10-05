@@ -57,4 +57,4 @@ Bubbling dots become islands, and islands acquire names. The Ising model offers 
 
 
 ## Links
-[github](https://github.com/nebelmesser) • [meme channel](https://t.me/s/nitschego) • [flickr](https://flickr.com/photos/street_happens) • [instagram](https://instagram.com/nebelmesser) • [youtube](https://www.youtube.com/@Nebelmesser) • [email](mailto:der.nebelmesser@gmail.com)
+[github](https://github.com/nebelmesser) • [meme channel](https://t.me/s/nitschego) • [substack](https://substack.com/@nebelmesser) • [telegram (rus)](https://t.me/s/nebelmesser) • [threads (rus)](https://threads.com/@nebelmesser) • [email](mailto:der.nebelmesser@gmail.com)
