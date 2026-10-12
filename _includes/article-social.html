@@ -13,7 +13,8 @@
 {%- endfor -%}
 {%- assign article_description = article_description | default: site.description -%}
 {%- assign article_site_title = site.title | markdownify | strip_html | normalize_whitespace -%}
-{%- assign article_title = page.title | default: site.title | markdownify | strip_html | normalize_whitespace -%}
+{%- assign article_fallback_title = page.name | split: '.' | first | replace: '-', ' ' | replace: '_', ' ' | capitalize -%}
+{%- assign article_title = page.title | default: article_fallback_title | markdownify | strip_html | normalize_whitespace -%}
 {%- assign article_url = page.url | absolute_url -%}
 {%- assign article_locale = page.locale | default: site.locale | default: page.lang | default: page_language | default: site.lang | default: 'en_US' | replace: '-', '_' -%}
 {%- assign article_image = '' -%}

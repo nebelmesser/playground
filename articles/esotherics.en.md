@@ -1,3 +1,5 @@
+# Science and Esotericism
+
 I've been reading Threads and noticed that hardline believers in science and esoteric thinkers have more in common than they might think. Both tend to:
 1. Know each other mainly through memes they barely understand.
 2. Bring their maps to the wrong territory.

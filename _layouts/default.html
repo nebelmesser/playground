@@ -43,14 +43,16 @@
   <body>
     <div class="wrapper">
       <section>
+        {% if page.url == '/' or page.url == '/index.html' %}
         <div id="title">
-          {% if page.url == '/' or page.url == '/index.html' %}
           <h1>{{ site.title | default: site.github.repository_name }}</h1>
-          {% else %}
-          <h1><a href="{{ '/' | relative_url }}">{{ site.title | default: site.github.repository_name }}</a></h1>
-          {% endif %}
           <p>{{ site.description | default: site.github.project_tagline }}</p>
         </div>
+        {% else %}
+        <div id="title" class="site-title-compact">
+          <a href="{{ '/' | relative_url }}">{{ site.title | default: site.github.repository_name }}</a>
+        </div>
+        {% endif %}
 
         {% if page_directory == 'articles' %}
         <main>

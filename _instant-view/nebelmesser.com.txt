@@ -1,8 +1,10 @@
 # Telegram Instant View template for nebelmesser.com.
-# After publishing the HTML changes, open https://instantview.telegram.org/my
-# with https://nebelmesser.com/articles/spacesuit.en.html and paste these rules.
-# Save and test articles with and without images, in both languages.
-# Share the editor's t.me/iv link with its generated rhash to enable your template.
+# Saved in https://instantview.telegram.org/my/nebelmesser.com/ on 2026-10-12.
+# Template rhash: e99baf31ab52a4
+# Verified in Telegram's editor: sublime.ru, spacesuit.ru, pendulum.ru,
+# ising.en (both photos), and technomancy.ru.
+# Share https://t.me/iv?url=URL_ENCODED_ARTICLE_URL&rhash=e99baf31ab52a4
+# to enable this template immediately. Encode the complete public article URL.
 # Ordinary article links require Telegram to approve the template for this domain.
 # Reference: https://instantview.telegram.org/docs
 

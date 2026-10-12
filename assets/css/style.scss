@@ -38,11 +38,20 @@ section {
   margin-bottom: 28px;
 }
 
-#title h1 a {
+section #title.site-title-compact {
+  margin-bottom: 20px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+#title h1 a,
+#title.site-title-compact a {
   color: inherit;
 }
 
-#title h1 a:hover {
+#title h1 a:hover,
+#title.site-title-compact a:hover {
   color: #ffcc00;
 }
 

@@ -1,3 +1,5 @@
+# Double Pendulum
+
 Everyone loves space and those damn quanta, but they don't affect everyday life the way chaos does.
 The double pendulum is the fruit fly of chaotic systems. It dances wildly, but there is no randomness in it. To predict its motion, you need to find a point on a map. That map has 337 trillion pixels along just one side, and it has six dimensions. Miss the point and you lose.
 
