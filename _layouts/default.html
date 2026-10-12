@@ -1,5 +1,15 @@
+{%- assign page_directory = page.path | split: '/' | first -%}
+{%- assign page_language = page.lang | default: site.lang | default: 'en-US' -%}
+{%- if page_directory == 'articles' and page.lang == nil -%}
+  {%- assign article_language = page.name | split: '.' | slice: -2, 1 | first -%}
+  {%- if article_language == 'ru' -%}
+    {%- assign page_language = 'ru-RU' -%}
+  {%- elsif article_language == 'en' -%}
+    {%- assign page_language = 'en-US' -%}
+  {%- endif -%}
+{%- endif -%}
 <!doctype html>
-<html lang="{{ site.lang | default: "en-US" }}">
+<html lang="{{ page_language | escape }}">
   <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -13,7 +23,6 @@
       gtag('config', 'G-5D8EGFYM3L');
     </script>
 
-{% assign page_directory = page.path | split: '/' | first %}
 {% if page_directory == 'articles' %}
     {% include article-social.html %}
 {% else %}
@@ -43,7 +52,15 @@
           <p>{{ site.description | default: site.github.project_tagline }}</p>
         </div>
 
+        {% if page_directory == 'articles' %}
+        <main>
+          <article id="article-content" lang="{{ page_language | escape }}" itemscope itemtype="https://schema.org/Article">
+            {{ content }}
+          </article>
+        </main>
+        {% else %}
         {{ content }}
+        {% endif %}
 
         <footer id="site-credits">
           <hr>

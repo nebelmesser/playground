@@ -1,0 +1,38 @@
+# Telegram Instant View template for nebelmesser.com.
+# After publishing the HTML changes, open https://instantview.telegram.org/my
+# with https://nebelmesser.com/articles/spacesuit.en.html and paste these rules.
+# Save and test articles with and without images, in both languages.
+# Share the editor's t.me/iv link with its generated rhash to enable your template.
+# Ordinary article links require Telegram to approve the template for this domain.
+# Reference: https://instantview.telegram.org/docs
+
+~version: "2.1"
+
+# Only static articles; the home page and interactive simulations are excluded.
+?path: /articles/[^/_][^/]*
+!exists: //article[@id="article-content"]
+
+$body: //article[@id="article-content"]
+$title: ($body/h1)[1]
+title: $title
+title: //meta[@property="og:title"]/@content
+body: $body
+description: //meta[@property="og:description"]/@content
+image_url: //meta[@property="og:image"]/@content
+site_name: //meta[@property="og:site_name"]/@content
+
+# Preserve the visible author credit, when present, without the site footer.
+$author: //footer[@id="site-credits"]/span[contains(@class, "right")]/a[1][normalize-space()]
+author: $author
+author_url: $author/@href
+
+# The title is already displayed above the IV body.
+@remove: $title
+
+# Markdown can put a photo and article text in the same paragraph.
+# Promote the photo to a block without losing the text before or after it.
+@split_parent: $body//p/img
+@remove: $body//p[not(normalize-space()) and not(*)]
+
+# Keep essential interactive content from silently disappearing in future articles.
+@unsupported: $body//canvas

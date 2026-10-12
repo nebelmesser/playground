@@ -13,6 +13,7 @@ bin/*
 bin/serve
 _*
 !/_includes/
+!/_instant-view/
 node_modules/
 4d/app/node_modules/
 hilbert/app/node_modules/
