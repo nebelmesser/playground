@@ -1,5 +1,9 @@
 # A Spacesuit for the Subjective Abyss
+
+We explore the universe with quantum physics and our inner lives with medieval symbols. Could chaos theory, fractals, and neural networks give us a better language for subjective experience?
+
 ![Alchemic](/img/alchemic.png)
+
 Rationalist criticism of esotericism usually comes down to checking facts. Cards don't predict the future, astrology doesn't describe personality, and instruments don't detect auras. All true — and not all that interesting.
 
 What's more interesting is how esotericism keeps mixing two different ways of knowing. One builds models of the world that we can test. The other connects the world to human experience through metaphors and systems of associations. Let's call them analytical and poetic.

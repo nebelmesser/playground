@@ -1,0 +1,77 @@
+{%- comment -%}
+  Derive article previews from rendered Markdown using GitHub Pages compatible
+  Liquid. Image-only paragraphs and headings do not become the description.
+{%- endcomment -%}
+{%- assign article_description = '' -%}
+{%- assign article_paragraphs = content | split: '<p>' -%}
+{%- for paragraph in article_paragraphs offset: 1 -%}
+  {%- assign paragraph_text = paragraph | split: '</p>' | first | strip_html | normalize_whitespace | strip -%}
+  {%- if paragraph_text != '' -%}
+    {%- assign article_description = paragraph_text -%}
+    {%- break -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- assign article_description = article_description | default: site.description -%}
+{%- assign article_site_title = site.title | markdownify | strip_html | normalize_whitespace -%}
+{%- assign article_title = page.title | default: site.title | markdownify | strip_html | normalize_whitespace -%}
+{%- assign article_url = page.url | absolute_url -%}
+{%- assign article_locale = page.locale | default: site.locale | default: page.lang | default: site.lang | default: 'en_US' | replace: '-', '_' -%}
+{%- assign article_image = '' -%}
+{%- assign article_image_alt = '' -%}
+{%- if content contains '<img ' -%}
+  {%- assign image_tag = content | split: '<img ' | slice: 1, 1 | first | split: '>' | first -%}
+  {%- if image_tag contains 'src="' -%}
+    {%- assign article_image = image_tag | split: 'src="' | last | split: '"' | first -%}
+  {%- elsif image_tag contains "src='" -%}
+    {%- assign article_image = image_tag | split: "src='" | last | split: "'" | first -%}
+  {%- endif -%}
+  {%- if image_tag contains 'alt="' -%}
+    {%- assign article_image_alt = image_tag | split: 'alt="' | last | split: '"' | first -%}
+  {%- elsif image_tag contains "alt='" -%}
+    {%- assign article_image_alt = image_tag | split: "alt='" | last | split: "'" | first -%}
+  {%- endif -%}
+{%- endif -%}
+{%- if article_image != '' -%}
+  {%- assign image_start = article_image | slice: 0, 1 -%}
+  {%- assign image_protocol = article_image | slice: 0, 2 -%}
+  {%- if image_protocol == '//' -%}
+    {%- assign article_image = article_image | prepend: 'https:' -%}
+  {%- elsif image_start != '/' -%}
+    {%- unless article_image contains '://' -%}
+      {%- assign article_directory = page.url | split: '/' | pop | join: '/' | append: '/' -%}
+      {%- assign article_image = article_directory | append: article_image -%}
+    {%- endunless -%}
+  {%- endif -%}
+  {%- assign article_image = article_image | absolute_url -%}
+{%- endif %}
+    <title>{{ article_title | escape_once }}{% if article_title != article_site_title %} | {{ article_site_title | escape_once }}{% elsif site.tagline %} | {{ site.tagline | escape_once }}{% endif %}</title>
+    <meta name="generator" content="Jekyll v{{ jekyll.version }}">
+    <meta name="description" content="{{ article_description | escape_once }}">
+    <link rel="canonical" href="{{ article_url | escape_once }}">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="{{ article_title | escape_once }}">
+    <meta property="og:description" content="{{ article_description | escape_once }}">
+    <meta property="og:url" content="{{ article_url | escape_once }}">
+    <meta property="og:site_name" content="{{ article_site_title | escape_once }}">
+    <meta property="og:locale" content="{{ article_locale | escape_once }}">
+    <meta name="twitter:title" content="{{ article_title | escape_once }}">
+    <meta name="twitter:description" content="{{ article_description | escape_once }}">
+{%- if article_image != '' %}
+    <meta property="og:image" content="{{ article_image | escape_once }}">
+    <meta property="og:image:alt" content="{{ article_image_alt | escape_once }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="{{ article_image | escape_once }}">
+    <meta name="twitter:image:alt" content="{{ article_image_alt | escape_once }}">
+{%- else %}
+    <meta name="twitter:card" content="summary">
+{%- endif %}
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": {{ article_title | jsonify | replace: '<', '\u003c' }},
+        "description": {{ article_description | jsonify | replace: '<', '\u003c' }},
+        "url": {{ article_url | jsonify }}{% if article_image != '' %},
+        "image": {{ article_image | jsonify }}{% endif %}
+      }
+    </script>

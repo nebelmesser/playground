@@ -12,6 +12,7 @@ Gemfile
 bin/*
 bin/serve
 _*
+!/_includes/
 node_modules/
 4d/app/node_modules/
 hilbert/app/node_modules/
