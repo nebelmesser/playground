@@ -1,5 +1,18 @@
 {%- assign page_directory = page.path | split: '/' | first -%}
 {%- assign page_language = page.lang | default: site.lang | default: 'en-US' -%}
+{%- assign article_author = 'Nebelmesser' -%}
+{%- assign article_has_author_line = false -%}
+{%- if page_directory == 'articles' -%}
+  {%- assign article_author_line = content | split: '<p>' | slice: 1, 1 | first | split: '</p>' | first | newline_to_br | split: '<br />' | first | strip_html | normalize_whitespace | strip -%}
+  {%- assign article_author_prefix = article_author_line | slice: 0, 7 -%}
+  {%- if article_author_prefix == 'Author:' -%}
+    {%- assign article_has_author_line = true -%}
+    {%- assign article_named_author = article_author_line | remove_first: 'Author:' | strip -%}
+    {%- if article_named_author != '' -%}
+      {%- assign article_author = article_named_author -%}
+    {%- endif -%}
+  {%- endif -%}
+{%- endif -%}
 {%- if page_directory == 'articles' and page.lang == nil -%}
   {%- assign article_language = page.name | split: '.' | slice: -2, 1 | first -%}
   {%- if article_language == 'ru' -%}
@@ -69,7 +82,7 @@
           {% unless page.url == '/' or page.url == '/index.html' %}
           <span class="credits left"><a href="{{ '/' | relative_url }}">← Back to main page</a></span>
           {% endunless %}
-          <span class="credits right">By <a rel="author" href="{{ '/' | absolute_url }}">nebelmesser.com</a> &bull; Theme by <a href="https://twitter.com/mattgraham">mattgraham</a></span>
+          <span class="credits right">By <a rel="author" href="{{ '/' | absolute_url }}">{{ article_author | escape_once }}</a> &bull; Theme by <a href="https://twitter.com/mattgraham">mattgraham</a></span>
         </footer>
       </section>
     </div>

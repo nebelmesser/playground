@@ -5,7 +5,11 @@
 {%- assign article_description = '' -%}
 {%- assign article_paragraphs = content | split: '<p>' -%}
 {%- for paragraph in article_paragraphs offset: 1 -%}
-  {%- assign paragraph_text = paragraph | split: '</p>' | first | strip_html | normalize_whitespace | strip -%}
+  {%- assign paragraph_html = paragraph | split: '</p>' | first -%}
+  {%- if forloop.first and article_has_author_line -%}
+    {%- assign paragraph_html = paragraph_html | newline_to_br | split: '<br />' | slice: 1, 100000 | join: ' ' -%}
+  {%- endif -%}
+  {%- assign paragraph_text = paragraph_html | strip_html | normalize_whitespace | strip -%}
   {%- if paragraph_text != '' -%}
     {%- assign article_description = paragraph_text -%}
     {%- break -%}
@@ -48,6 +52,8 @@
     <title>{{ article_title | escape_once }}{% if article_title != article_site_title %} | {{ article_site_title | escape_once }}{% elsif site.tagline %} | {{ site.tagline | escape_once }}{% endif %}</title>
     <meta name="generator" content="Jekyll v{{ jekyll.version }}">
     <meta name="description" content="{{ article_description | escape_once }}">
+    <meta name="author" content="{{ article_author | escape_once }}">
+    <link rel="author" href="{{ '/' | absolute_url }}">
     <link rel="canonical" href="{{ article_url | escape_once }}">
     <meta property="og:type" content="article">
     <meta property="og:title" content="{{ article_title | escape_once }}">
