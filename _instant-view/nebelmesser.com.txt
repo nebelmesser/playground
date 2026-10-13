@@ -30,8 +30,8 @@ author_url: $author/@href
 
 # The optional Author: line is represented by the IV author property.
 # Keep any article text that follows it without a blank Markdown line.
-$byline: ($body/p)[1][starts-with(normalize-space(), "Author:")]
-@remove: $byline[normalize-space(substring-after(., "Author:")) = normalize-space($author)]
+$byline: $body/p[1][starts-with(normalize-space(), "Author:")]
+@remove: $byline[normalize-space(substring-after(., "Author:")) = normalize-space(//meta[@name="author"]/@content)]
 @replace("^Author:.*(\n|$)", ""): $byline/text()[1]
 
 # The title is already displayed above the IV body.
