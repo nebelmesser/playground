@@ -23,8 +23,8 @@ description: //meta[@property="og:description"]/@content
 image_url: //meta[@property="og:image"]/@content
 site_name: //meta[@property="og:site_name"]/@content
 
-# Preserve the visible author credit, when present, without the site footer.
-$author: //footer[@id="site-credits"]/span[contains(@class, "right")]/a[1][normalize-space()]
+# Use the visible website author credit, identified by rel="author".
+$author: //footer[@id="site-credits"]//a[@rel="author"][normalize-space()]
 author: $author
 author_url: $author/@href
 
