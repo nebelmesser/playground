@@ -2,7 +2,6 @@
 <img style="border: none; box-shadow: none" src="assets/fire-under-construction-animation.gif" />
 </center>
 
-
 ## Ising Field Model
 <a href="/ising/" aria-label="Open the Ising model"><video src="img/ising.mp4" width="1600" height="1194" autoplay loop muted playsinline></video></a>
 
