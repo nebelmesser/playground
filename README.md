@@ -2,6 +2,16 @@
 <img style="border: none; box-shadow: none" src="assets/fire-under-construction-animation.gif" />
 </center>
 
+
+## Ising Field Model
+<a href="/ising/" aria-label="Open the Ising model"><video src="img/ising.mp4" width="1600" height="1194" autoplay loop muted playsinline></video></a>
+
+### Article: [Mountains Are Slow Waves](articles/ising.en)
+
+Bubbling dots become islands, and islands acquire names. The Ising model offers a way to watch boundaries, identity, and language change while things remain recognizable.
+
+---
+
 ## Manticore Technomancy Engine
 <a href="https://github.com/nebelmesser/manticore"><video src="img/manticore.mp4" autoplay loop muted playsinline></video></a>
 
@@ -19,7 +29,6 @@ Random prompts, strange AI images, and three-word captions become material for a
 Two sticks joined by hinges can be surprisingly hard to predict. A small lab lets you explore how tiny differences in starting conditions grow into very different motion.
 
 ---
-
 
 ## Hilbert Fractal Clock
 [![Hilbert Fractal Clock](hilbert/img/screen.png)](hilbert/clock.html)
@@ -49,12 +58,6 @@ Mathematics and computing give us new ways to think, observe, and play. This is 
 ### [A Spacesuit for the Abyss of Subjective Experience](articles/spacesuit.en)
 
 Old symbols once grew out of the best knowledge of their time. What new metaphors could we build from chaos, emergence, and neural networks?
-
-### [Mountains Are Slow Waves](articles/ising.en)
-
-Bubbling dots become islands, and islands acquire names. The Ising model offers a way to watch boundaries, identity, and language change while things remain recognizable.
-
-
 
 ## Links
 [github](https://github.com/nebelmesser) • [meme channel](https://t.me/s/nitschego) • [substack](https://substack.com/@nebelmesser) • [telegram (rus)](https://t.me/s/nebelmesser) • [threads (rus)](https://threads.com/@nebelmesser) • [email](mailto:der.nebelmesser@gmail.com)
