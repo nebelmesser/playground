@@ -1,0 +1,11 @@
+✔ same seed repeats geometry; new seeds change passage topology, rooms and entrance (17.845834ms)
+✔ generated corridors are connected with clearance for the actual finite-radius drop (57.001791ms)
+✔ the chemical process explores different generated mazes without penetrating walls or losing mass (2640.731875ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2770.347667

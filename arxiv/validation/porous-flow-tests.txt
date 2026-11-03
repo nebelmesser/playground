@@ -1,0 +1,14 @@
+✔ water markers sample phase flux divided by water content, including inlet and no-flux edges (2.584458ms)
+✔ a steady filled field keeps moving at the solved speed; zero steps and zero flux do not animate (12.147208ms)
+✔ a changed flow field bends existing trajectories and finite display lifetimes renew at the inlet (25.421458ms)
+✔ seeded pressure/transport is deterministic and paused tools change the medium without adding water (1393.748ms)
+✔ a drawn ridge diverts the evolving front, leaves an oil shadow, and an opened gap recaptures flow (20046.335542ms)
+✔ live viscosity, capillarity and inlet-width corners stay finite and conservative (12822.888083ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 34365.559

@@ -1,0 +1,156 @@
+{"slug":"restless-wetting","preset":"A moving drop","steps":1400,"time":1400,"finite":true,"min":-0.06372158075787725,"max":2154,"metrics":{"Liquid in grooves":"2.7%","Volume / target":"0.979","Accepted trials":12960,"Memory":"1400 MCS"}}
+{"slug":"restless-wetting","preset":"A quiet drop","steps":1400,"time":1400,"finite":true,"min":0,"max":2161,"metrics":{"Liquid in grooves":"1.2%","Volume / target":"0.982","Accepted trials":11947,"Memory":"1400 MCS"}}
+{"slug":"restless-wetting","preset":"Already in the grooves","steps":1400,"time":1400,"finite":true,"min":-0.9266969474457797,"max":2164,"metrics":{"Liquid in grooves":"55.6%","Volume / target":"0.984","Accepted trials":11050,"Memory":"1400 MCS"}}
+{"slug":"restless-wetting","extreme":"minimum","steps":1400,"finite":true,"maxAbs":2166}
+{"slug":"restless-wetting","extreme":"maximum","steps":1400,"finite":true,"maxAbs":2155}
+{"slug":"noise-healing","preset":"Noise can repair","steps":3000,"time":599.9999999997443,"finite":true,"min":-5.122182775912771,"max":4.8834465485025875,"metrics":{"Profile mismatch η":"0.01733","Noise σ":"6.0","Shared environment":"same noise in both copies","Boundary pulse":"finished"}}
+{"slug":"noise-healing","preset":"A quiet boundary","steps":3000,"time":599.9999999997443,"finite":true,"min":-0.2290481579162249,"max":0.21618458534203808,"metrics":{"Profile mismatch η":"0.95720","Noise σ":"0.0","Shared environment":"same noise in both copies","Boundary pulse":"finished"}}
+{"slug":"noise-healing","preset":"A light disturbance","steps":3000,"time":599.9999999997443,"finite":true,"min":-1.0244365551825543,"max":0.9766893097005174,"metrics":{"Profile mismatch η":"0.00910","Noise σ":"1.2","Shared environment":"same noise in both copies","Boundary pulse":"finished"}}
+{"slug":"noise-healing","extreme":"minimum","steps":3000,"finite":true,"maxAbs":0.2290481579162249}
+{"slug":"noise-healing","extreme":"maximum","steps":3000,"finite":true,"maxAbs":9.077741827922617}
+{"slug":"molecular-light","preset":"Light and molecules","steps":1800,"time":32.400000000001114,"finite":true,"min":-0.6176881093584958,"max":1.6492357455944313,"metrics":{"Molecular atoms":"23.67%","Atom balance Nₐ+2Nₘ":"1.000000","Cavity light":"0.0001","Square-mode weight":"0.271"}}
+{"slug":"molecular-light","preset":"Below the threshold","steps":1800,"time":32.400000000001114,"finite":true,"min":-1.7415238418881127,"max":1.0043189520668248,"metrics":{"Molecular atoms":"0.01%","Atom balance Nₐ+2Nₘ":"1.000000","Cavity light":"0.0000","Square-mode weight":"0.298"}}
+{"slug":"molecular-light","preset":"A stronger conversion","steps":1800,"time":32.400000000001114,"finite":true,"min":-1.2336907093419947,"max":1.0008975545377128,"metrics":{"Molecular atoms":"56.54%","Atom balance Nₐ+2Nₘ":"1.000000","Cavity light":"0.0029","Square-mode weight":"0.314"}}
+{"slug":"molecular-light","extreme":"minimum","steps":1800,"finite":true,"maxAbs":1.7378869078242223}
+{"slug":"molecular-light","extreme":"maximum","steps":1800,"finite":true,"maxAbs":1.0995902961528286}
+{"slug":"opening-membrane","preset":"A late passage","steps":2000,"time":160.00000000000261,"finite":true,"min":0,"max":0.9999999999999989,"metrics":{"Open pores":35,"Small solute equilibration":"100.0%","Larger solute equilibration":"0.0%","Pore area":"0.0482"}}
+{"slug":"opening-membrane","preset":"A smaller guest","steps":2000,"time":160.00000000000261,"finite":true,"min":0,"max":0.9999999999999989,"metrics":{"Open pores":35,"Small solute equilibration":"100.0%","Larger solute equilibration":"100.0%","Pore area":"0.0482"}}
+{"slug":"opening-membrane","preset":"Slow openings","steps":2000,"time":160.00000000000261,"finite":true,"min":0,"max":0.9999999999999988,"metrics":{"Open pores":49,"Small solute equilibration":"100.0%","Larger solute equilibration":"0.0%","Pore area":"0.0482"}}
+{"slug":"opening-membrane","extreme":"minimum","steps":2000,"finite":true,"maxAbs":0.9999999999999987}
+{"slug":"opening-membrane","extreme":"maximum","steps":2000,"finite":true,"maxAbs":0.9999999999999989}
+{"slug":"grain-shelter","preset":"Finding shelter","steps":1800,"time":1800,"finite":true,"min":0,"max":4108,"metrics":{"Captured arrivals":14400,"Retained now":5667,"Returned to gas":8732,"Effective retention":"39.4%"}}
+{"slug":"grain-shelter","preset":"An easier escape","steps":1800,"time":1800,"finite":true,"min":0,"max":1,"metrics":{"Captured arrivals":14400,"Retained now":5435,"Returned to gas":8965,"Effective retention":"37.7%"}}
+{"slug":"grain-shelter","preset":"Little curvature bias","steps":1800,"time":1800,"finite":true,"min":0,"max":1,"metrics":{"Captured arrivals":14400,"Retained now":5691,"Returned to gas":8709,"Effective retention":"39.5%"}}
+{"slug":"grain-shelter","extreme":"minimum","steps":1800,"finite":true,"maxAbs":1}
+{"slug":"grain-shelter","extreme":"maximum","steps":1800,"finite":true,"maxAbs":1}
+{"slug":"a-world-with-one-turn","preset":"Two ways to join a world","steps":7000,"time":420.0000000000144,"finite":true,"min":-1.3318639205889993,"max":0.8000246045865846,"metrics":{"Straight-world mean":"-13.7°","Flipped-world mean":"-7.5°","External aligning field":"None","Difference":"Only how the seam joins"}}
+{"slug":"a-world-with-one-turn","preset":"A quiet seam","steps":7000,"time":420.0000000000144,"finite":true,"min":-0.5842502158097977,"max":0.6596653416755485,"metrics":{"Straight-world mean":"12.3°","Flipped-world mean":"-4.0°","External aligning field":"None","Difference":"Only how the seam joins"}}
+{"slug":"a-world-with-one-turn","preset":"More wandering","steps":7000,"time":420.0000000000144,"finite":true,"min":-2.678654187801905,"max":1.749142321575008,"metrics":{"Straight-world mean":"-20.3°","Flipped-world mean":"-15.0°","External aligning field":"None","Difference":"Only how the seam joins"}}
+{"slug":"a-world-with-one-turn","extreme":"minimum","steps":7000,"finite":true,"maxAbs":0}
+{"slug":"a-world-with-one-turn","extreme":"maximum","steps":7000,"finite":true,"maxAbs":2.7304969151147347}
+{"slug":"bending-the-current","preset":"Before the snap","steps":5000,"time":125.0000000000113,"finite":true,"min":0,"max":0.32465344630861787,"metrics":{"Bent fibres":0,"Main / bypass flow":"0.072 / 0.000","Shared pressure":"0.185","Pump":"Held positive flow"}}
+{"slug":"bending-the-current","preset":"The same flow, after bending","steps":5000,"time":125.0000000000113,"finite":true,"min":0,"max":112.85057392220288,"metrics":{"Bent fibres":10,"Main / bypass flow":"0.072 / 0.000","Shared pressure":"112.851","Pump":"Held positive flow"}}
+{"slug":"bending-the-current","preset":"Short fibres","steps":5000,"time":125.0000000000113,"finite":true,"min":0,"max":0.24115212394699775,"metrics":{"Bent fibres":0,"Main / bypass flow":"0.072 / 0.000","Shared pressure":"0.113","Pump":"Held positive flow"}}
+{"slug":"bending-the-current","extreme":"minimum","steps":5000,"finite":true,"maxAbs":0.1295897997112479}
+{"slug":"bending-the-current","extreme":"maximum","steps":5000,"finite":true,"maxAbs":1.6555629867738881}
+{"slug":"enough-to-hold","preset":"Caps that cannot agree","steps":3500,"time":175.00000000000554,"finite":true,"min":-0.13509256785364343,"max":3,"metrics":{"Layers conserved":48,"Tallest stack":3,"Accepted exchanges":1122,"Preferred geometry":"Spherical cap"}}
+{"slug":"enough-to-hold","preset":"Saddles, tightly held","steps":3500,"time":175.00000000000554,"finite":true,"min":-0.8000875915729602,"max":7,"metrics":{"Layers conserved":48,"Tallest stack":7,"Accepted exchanges":466,"Preferred geometry":"Saddle"}}
+{"slug":"enough-to-hold","preset":"Cylindrical layers","steps":3500,"time":175.00000000000554,"finite":true,"min":-0.5166883420002086,"max":7,"metrics":{"Layers conserved":48,"Tallest stack":7,"Accepted exchanges":772,"Preferred geometry":"Cylinder"}}
+{"slug":"enough-to-hold","extreme":"minimum","steps":3500,"finite":true,"maxAbs":6}
+{"slug":"enough-to-hold","extreme":"maximum","steps":3500,"finite":true,"maxAbs":3}
+{"slug":"temporal-lens","preset":"Three returning lights","steps":1000,"time":69.99999999999966,"finite":true,"min":-49.61530839224195,"max":51.36115934326404,"metrics":{"Medium index":"−1.43","Optical evolution time":"-37.10","Field energy norm":"0.0016","Temporal boundary":"crossed"}}
+{"slug":"temporal-lens","preset":"A slow return","steps":1000,"time":69.99999999999966,"finite":true,"min":-118.99745128251907,"max":118.99745128251875,"metrics":{"Medium index":"−4.00","Optical evolution time":"-8.75","Field energy norm":"0.0064","Temporal boundary":"crossed"}}
+{"slug":"temporal-lens","preset":"Fine marks return","steps":1000,"time":69.99999999999966,"finite":true,"min":-53.93099939216436,"max":53.93099939216436,"metrics":{"Medium index":"−0.80","Optical evolution time":"-76.25","Field energy norm":"0.0015","Temporal boundary":"crossed"}}
+{"slug":"temporal-lens","extreme":"minimum","steps":1000,"finite":true,"maxAbs":53.52143635815834}
+{"slug":"temporal-lens","extreme":"maximum","steps":1000,"finite":true,"maxAbs":48.9704821163066}
+{"slug":"wave-coarsening","preset":"A longer rhythm","steps":2200,"time":164.99999999998687,"finite":true,"min":-11.250219568062544,"max":13.329841025057009,"metrics":{"Strain RMS":"4.657","Mean wave scale":"35.98","Momentum loss":"none"}}
+{"slug":"wave-coarsening","preset":"Friction holds a scale","steps":2200,"time":164.99999999998687,"finite":true,"min":-1.9227924570325798,"max":2.250594983221652,"metrics":{"Strain RMS":"1.279","Mean wave scale":"13.29","Momentum loss":"friction"}}
+{"slug":"wave-coarsening","preset":"Passive cloth","steps":2200,"time":164.99999999998687,"finite":true,"min":-5.182039003480561e-08,"max":5.7272246419260706e-08,"metrics":{"Strain RMS":"0.000","Mean wave scale":"69.58","Momentum loss":"friction"}}
+{"slug":"wave-coarsening","extreme":"minimum","steps":2200,"finite":true,"maxAbs":0.0005496732362048685}
+{"slug":"wave-coarsening","extreme":"maximum","steps":2200,"finite":true,"maxAbs":2.7727418343936217}
+{"slug":"two-calls","preset":"Two calls","steps":1800,"time":162.00000000000486,"finite":true,"min":0.014035440885160655,"max":6.022724296021729,"metrics":{"Cell mass":"7741.70","Peak density":"6.02","Food remaining":"1.21"}}
+{"slug":"two-calls","preset":"Stay together","steps":1800,"time":162.00000000000486,"finite":true,"min":0.0003484690963499682,"max":10.091820752669783,"metrics":{"Cell mass":"7741.70","Peak density":"10.09","Food remaining":"1.28"}}
+{"slug":"two-calls","preset":"Food returns sooner","steps":1800,"time":162.00000000000486,"finite":true,"min":0.999248679478817,"max":1.0004891524051513,"metrics":{"Cell mass":"7741.70","Peak density":"1.00","Food remaining":"1.00"}}
+{"slug":"two-calls","extreme":"minimum","steps":1800,"finite":true,"maxAbs":1.000052553450198}
+{"slug":"two-calls","extreme":"maximum","steps":1800,"finite":true,"maxAbs":21.821414711905028}
+{"slug":"cuts-that-open","preset":"A cut sheet opens","steps":5000,"time":125.0000000000113,"finite":true,"min":0.0049881722465722755,"max":0.9950118277534277,"metrics":{"Open area":"49.0%","Tile angle":"36.9°","Panel strain":"0 · rigid tiles","Motion":"Relaxing to held actuation"}}
+{"slug":"cuts-that-open","preset":"Nearly locked","steps":5000,"time":125.0000000000113,"finite":true,"min":0.09424777961466003,"max":0.8852566213901147,"metrics":{"Open area":"15.8%","Tile angle":"5.4°","Panel strain":"0 · rigid tiles","Motion":"Relaxing to held actuation"}}
+{"slug":"cuts-that-open","preset":"Slow hinges","steps":5000,"time":125.0000000000113,"finite":true,"min":1.3211326871376272e-07,"max":0.9999998678867312,"metrics":{"Open area":"50.0%","Tile angle":"45.0°","Panel strain":"0 · rigid tiles","Motion":"Relaxing to held actuation"}}
+{"slug":"cuts-that-open","extreme":"minimum","steps":5000,"finite":true,"maxAbs":0.8535533905932737}
+{"slug":"cuts-that-open","extreme":"maximum","steps":5000,"finite":true,"maxAbs":1}
+{"slug":"crowded-skin","preset":"A crowded surface","steps":6000,"time":6000,"finite":true,"min":-0.9899605882488891,"max":1.999318115682101,"metrics":{"Mean pressure":"0.520","Extrusions":2509,"Divisions":2387,"Rearrangements":1104}}
+{"slug":"crowded-skin","preset":"Gentle divisions","steps":6000,"time":6000,"finite":true,"min":-1.0079427400292407,"max":1.999741670991053,"metrics":{"Mean pressure":"0.997","Extrusions":2939,"Divisions":3055,"Rearrangements":6}}
+{"slug":"crowded-skin","preset":"Stronger neighbours","steps":6000,"time":6000,"finite":true,"min":-0.9941461546460816,"max":1.4983667715580589,"metrics":{"Mean pressure":"0.830","Extrusions":1632,"Divisions":2214,"Rearrangements":2154}}
+{"slug":"crowded-skin","extreme":"minimum","steps":6000,"finite":true,"maxAbs":0.9993668261810591}
+{"slug":"crowded-skin","extreme":"maximum","steps":6000,"finite":true,"maxAbs":3.9970840842451363}
+{"slug":"where-peeling-stopped","preset":"Descending stops","steps":4500,"time":112.50000000000846,"finite":true,"min":0,"max":1,"metrics":{"Latched stops":1,"Peel front":"0.0%","Relative pull":"1.00","Drive":"Finite protocol complete"}}
+{"slug":"where-peeling-stopped","preset":"A later larger peel","steps":4500,"time":112.50000000000846,"finite":true,"min":0,"max":1,"metrics":{"Latched stops":1,"Peel front":"0.0%","Relative pull":"1.00","Drive":"Finite protocol complete"}}
+{"slug":"where-peeling-stopped","preset":"A stubborn imprint","steps":4500,"time":112.50000000000846,"finite":true,"min":0,"max":1,"metrics":{"Latched stops":1,"Peel front":"0.0%","Relative pull":"1.00","Drive":"Finite protocol complete"}}
+{"slug":"where-peeling-stopped","extreme":"minimum","steps":4500,"finite":true,"maxAbs":1}
+{"slug":"where-peeling-stopped","extreme":"maximum","steps":4500,"finite":true,"maxAbs":1}
+{"slug":"skyrmion-light","preset":"Through the texture","steps":1200,"time":47.999999999999154,"finite":true,"min":-0.9999983310699463,"max":0.9999068975448608,"metrics":{"Six-mode norm":"1.00000000","Texture winding":"0.882","Mode drive":"external probe"}}
+{"slug":"skyrmion-light","preset":"One handedness","steps":1200,"time":47.999999999999154,"finite":true,"min":-0.999933123588562,"max":0.9993773698806763,"metrics":{"Six-mode norm":"1.00000000","Texture winding":"0.920","Mode drive":"held"}}
+{"slug":"skyrmion-light","preset":"The other handedness","steps":1200,"time":47.999999999999154,"finite":true,"min":-0.999933123588562,"max":0.9993773698806763,"metrics":{"Six-mode norm":"1.00000000","Texture winding":"-0.920","Mode drive":"held"}}
+{"slug":"skyrmion-light","extreme":"minimum","steps":1200,"finite":true,"maxAbs":0.9999986290931702}
+{"slug":"skyrmion-light","extreme":"maximum","steps":1200,"finite":true,"maxAbs":0.9999986290931702}
+{"slug":"azimuthal-backflow","preset":"Against the turn","steps":1800,"time":62.9999999999971,"finite":true,"min":-0.38645294308662415,"max":6.273694961726196,"metrics":{"Mean OAM":"-1.891","Backflow light":"1.66%","Constituent OAM":"−1 and −4"}}
+{"slug":"azimuthal-backflow","preset":"Weak companion","steps":1800,"time":62.9999999999971,"finite":true,"min":-0.3017772436141968,"max":6.252205387922846,"metrics":{"Mean OAM":"-1.176","Backflow light":"1.19%","Constituent OAM":"−1 and −4"}}
+{"slug":"azimuthal-backflow","preset":"Beyond the waist","steps":1800,"time":62.9999999999971,"finite":true,"min":-0.1638750582933426,"max":6.274193937138357,"metrics":{"Mean OAM":"-2.258","Backflow light":"1.58%","Constituent OAM":"−1 and −4"}}
+{"slug":"azimuthal-backflow","extreme":"minimum","steps":1800,"finite":true,"maxAbs":6.278016976767923}
+{"slug":"azimuthal-backflow","extreme":"maximum","steps":1800,"finite":true,"maxAbs":6.278570125052596}
+{"slug":"what-the-large-leave","preset":"Thin survivors","steps":1800,"time":1800,"finite":true,"min":-1,"max":1021,"metrics":{"Phase":"Memory held","Solid volume":"70.9%","Surviving old plates":85,"New plates":436}}
+{"slug":"what-the-large-leave","preset":"Cubic rooms","steps":1800,"time":1800,"finite":true,"min":-1,"max":318,"metrics":{"Phase":"Memory held","Solid volume":"59.4%","Surviving old plates":12,"New plates":148}}
+{"slug":"what-the-large-leave","preset":"Deep reversion","steps":1800,"time":1800,"finite":true,"min":-1,"max":1070,"metrics":{"Phase":"Memory held","Solid volume":"69.2%","Surviving old plates":9,"New plates":530}}
+{"slug":"what-the-large-leave","extreme":"minimum","steps":1800,"finite":true,"maxAbs":754}
+{"slug":"what-the-large-leave","extreme":"maximum","steps":1800,"finite":true,"maxAbs":1098}
+{"slug":"distant-disquiet","preset":"Distant disquiet","steps":3000,"time":3000,"finite":true,"min":0,"max":1,"metrics":{"In contact":"302 / 480","Stillness":"Not yet","Area fraction":"0.32"}}
+{"slug":"distant-disquiet","preset":"Finding stillness","steps":3000,"time":3000,"finite":true,"min":0,"max":0.9981306090113462,"metrics":{"In contact":"0 / 480","Stillness":"Absorbed","Area fraction":"0.18"}}
+{"slug":"distant-disquiet","preset":"Only contact","steps":3000,"time":3000,"finite":true,"min":0,"max":1,"metrics":{"In contact":"286 / 480","Stillness":"Not yet","Area fraction":"0.38"}}
+{"slug":"distant-disquiet","extreme":"minimum","steps":3000,"finite":true,"maxAbs":0.9972661911132565}
+{"slug":"distant-disquiet","extreme":"maximum","steps":3000,"finite":true,"maxAbs":1}
+{"slug":"when-open","preset":"Sometimes open","steps":4500,"time":157.4999999999879,"finite":true,"min":0,"max":1,"metrics":{"Arrived":"200 / 200","Unnoticed crossing intervals":2925,"Mean completed search":"16.6","Returns":880}}
+{"slug":"when-open","preset":"Long absences","steps":4500,"time":157.4999999999879,"finite":true,"min":-1.0234711687709492,"max":3.5878817608444513,"metrics":{"Arrived":"165 / 200","Unnoticed crossing intervals":17082,"Mean completed search":"54.2","Returns":3610}}
+{"slug":"when-open","preset":"Without return","steps":4500,"time":157.4999999999879,"finite":true,"min":-29.785770867096815,"max":29.512167160916796,"metrics":{"Arrived":"160 / 200","Unnoticed crossing intervals":2678,"Mean completed search":"24.1","Returns":0}}
+{"slug":"when-open","extreme":"minimum","steps":4500,"finite":true,"maxAbs":30.16974219979716}
+{"slug":"when-open","extreme":"maximum","steps":4500,"finite":true,"maxAbs":1}
+{"slug":"ink-current","preset":"Two inks","steps":1600,"time":55.99999999999778,"finite":true,"min":-0.2248399057553348,"max":0.7219040972439932,"metrics":{"Flow speed RMS":"0.121","Dye contrast":"0.121","Stirring":"external"}}
+{"slug":"ink-current","preset":"A slower fold","steps":1600,"time":55.99999999999778,"finite":true,"min":-0.09259038729935916,"max":0.9384449231593971,"metrics":{"Flow speed RMS":"0.051","Dye contrast":"0.124","Stirring":"external"}}
+{"slug":"ink-current","preset":"Rest after stirring","steps":1600,"time":55.99999999999778,"finite":true,"min":-0.0040313747088813615,"max":0.004242276519860637,"metrics":{"Flow speed RMS":"0.003","Dye contrast":"0.001","Stirring":"off"}}
+{"slug":"ink-current","extreme":"minimum","steps":1600,"finite":true,"maxAbs":0.9713847222831654}
+{"slug":"ink-current","extreme":"maximum","steps":1600,"finite":true,"maxAbs":0.7609980021645943}
+{"slug":"forest-return","preset":"After the fire","steps":3200,"time":3200,"finite":true,"min":0,"max":2,"metrics":{"Tree cover":"17.2%","Fire front":6,"Last fire":"38 trees","Slow growth ticks":692}}
+{"slug":"forest-return","preset":"Long quiet","steps":3200,"time":3200,"finite":true,"min":0,"max":2,"metrics":{"Tree cover":"57.5%","Fire front":14,"Last fire":"486 trees","Slow growth ticks":1736}}
+{"slug":"forest-return","preset":"Small clearings","steps":3200,"time":3200,"finite":true,"min":0,"max":2,"metrics":{"Tree cover":"47.5%","Fire front":1,"Last fire":"3 trees","Slow growth ticks":352}}
+{"slug":"forest-return","extreme":"minimum","steps":3200,"finite":true,"maxAbs":2}
+{"slug":"forest-return","extreme":"maximum","steps":3200,"finite":true,"maxAbs":2}
+{"slug":"room-for-one-more","preset":"A slowly opening head","steps":1050,"time":1050,"finite":true,"min":0,"max":15.893939098253199,"metrics":{"Organs":900,"Latest gap angle":"134.4°","New exclusion radius":"0.045","Growth":"Finite head complete"}}
+{"slug":"room-for-one-more","preset":"A hurried opening","steps":1050,"time":1050,"finite":true,"min":0,"max":10.048974567993815,"metrics":{"Organs":900,"Latest gap angle":"170.5°","New exclusion radius":"0.040","Growth":"Finite head complete"}}
+{"slug":"room-for-one-more","preset":"A few large organs","steps":1050,"time":1050,"finite":true,"min":0,"max":32.68978559658515,"metrics":{"Organs":600,"Latest gap angle":"136.6°","New exclusion radius":"0.090","Growth":"Finite head complete"}}
+{"slug":"room-for-one-more","extreme":"minimum","steps":1050,"finite":true,"maxAbs":58.27018543206217}
+{"slug":"room-for-one-more","extreme":"maximum","steps":1050,"finite":true,"maxAbs":72.38047927823534}
+{"slug":"diffusion-tree","preset":"Branching crystal","steps":1200,"time":1200,"finite":true,"min":0,"max":2414,"metrics":{"Attached particles":2414,"Cluster radius":"90.7","Seeds":1,"Growth":"Diffusing"}}
+{"slug":"diffusion-tree","preset":"Porous stone","steps":1200,"time":1200,"finite":true,"min":0,"max":2095,"metrics":{"Attached particles":2095,"Cluster radius":"58.6","Seeds":1,"Growth":"Diffusing"}}
+{"slug":"diffusion-tree","preset":"Faraway rain","steps":1200,"time":1200,"finite":true,"min":0,"max":909,"metrics":{"Attached particles":909,"Cluster radius":"57.1","Seeds":1,"Growth":"Diffusing"}}
+{"slug":"diffusion-tree","extreme":"minimum","steps":1200,"finite":true,"maxAbs":3982}
+{"slug":"diffusion-tree","extreme":"maximum","steps":1200,"finite":true,"maxAbs":932}
+{"slug":"scattering-billiard","preset":"Dispersing mirrors","steps":2600,"time":104.00000000000506,"finite":true,"min":-0.9991596839583103,"max":0.9998640005037477,"metrics":{"Twin separation":"0.1104","Reflections":2897,"Longest free flight":"10.9 cells","Speed drift":"2.2e-16"}}
+{"slug":"scattering-billiard","preset":"Long free corridors","steps":2600,"time":104.00000000000506,"finite":true,"min":-0.9992267930659554,"max":0.9999421675880855,"metrics":{"Twin separation":"0.3360","Reflections":971,"Longest free flight":"47.9 cells","Speed drift":"2.2e-16"}}
+{"slug":"scattering-billiard","preset":"Narrow passages","steps":2600,"time":104.00000000000506,"finite":true,"min":-0.9948107728930764,"max":0.9987142863844931,"metrics":{"Twin separation":"0.5113","Reflections":6619,"Longest free flight":"10.8 cells","Speed drift":"1.1e-16"}}
+{"slug":"scattering-billiard","extreme":"minimum","steps":2600,"finite":true,"maxAbs":0.9992524585593677}
+{"slug":"scattering-billiard","extreme":"maximum","steps":2600,"finite":true,"maxAbs":0.999902704644211}
+{"slug":"gravity-garden","preset":"A turning disc","steps":6000,"time":143.99999999999213,"finite":true,"min":-94.53213926277789,"max":65.01157171305879,"metrics":{"Total energy":"-0.3692","Angular momentum":"0.5838","Energy drift":"-0.004%"}}
+{"slug":"gravity-garden","preset":"A cold collapse","steps":6000,"time":143.99999999999213,"finite":true,"min":-75.77301136733752,"max":99.56868972450141,"metrics":{"Total energy":"-0.5153","Angular momentum":"0.1583","Energy drift":"-0.003%"}}
+{"slug":"gravity-garden","preset":"Two passing gardens","steps":6000,"time":143.99999999999213,"finite":true,"min":-135.1083032604955,"max":111.64747132173557,"metrics":{"Total energy":"-0.4944","Angular momentum":"0.3947","Energy drift":"-0.003%"}}
+{"slug":"gravity-garden","extreme":"minimum","steps":6000,"finite":true,"maxAbs":154.34240587329197}
+{"slug":"gravity-garden","extreme":"maximum","steps":6000,"finite":true,"maxAbs":42.71347970527377}
+{"slug":"gray-scott","preset":"Division","steps":20000,"time":20000,"finite":true,"min":0.0009193047813798536,"max":0.942414077737851,"metrics":{"Mean V":"0.099","Active area":"26.2%"}}
+{"slug":"gray-scott","preset":"Coral","steps":20000,"time":20000,"finite":true,"min":0.00865546303986554,"max":0.887738399412844,"metrics":{"Mean V":"0.205","Active area":"60.3%"}}
+{"slug":"gray-scott","preset":"Maze","steps":20000,"time":20000,"finite":true,"min":0.014051646194638636,"max":0.7879874954669567,"metrics":{"Mean V":"0.165","Active area":"52.8%"}}
+{"slug":"gray-scott","extreme":"minimum","steps":4000,"finite":true,"maxAbs":0.9999999999999964}
+{"slug":"gray-scott","extreme":"maximum","steps":4000,"finite":true,"maxAbs":0.9999999999999991}
+{"slug":"active-matter","preset":"Clusters","steps":2500,"time":100.00000000000443,"finite":true,"min":0,"max":28.366466724456153,"metrics":{"In dense regions":"78%","Particles":640}}
+{"slug":"active-matter","preset":"Gas","steps":2500,"time":100.00000000000443,"finite":true,"min":0,"max":6.223704083308139,"metrics":{"In dense regions":"3%","Particles":640}}
+{"slug":"active-matter","preset":"Short memory","steps":2500,"time":100.00000000000443,"finite":true,"min":0,"max":12.691520076143727,"metrics":{"In dense regions":"49%","Particles":640}}
+{"slug":"active-matter","extreme":"minimum","steps":4000,"finite":true,"maxAbs":6.27764842464151}
+{"slug":"active-matter","extreme":"maximum","steps":4000,"finite":true,"maxAbs":12.501758689340456}
+{"slug":"cyclic-life","preset":"Spirals","steps":20000,"time":3199.9999999994093,"finite":true,"min":2.2762232641230193e-06,"max":0.9859694819633885,"metrics":{"A · coral":"0.307","B · jade":"0.326","C · blue":"0.255"}}
+{"slug":"cyclic-life","preset":"Small waves","steps":20000,"time":3199.9999999994093,"finite":true,"min":2.3969617758614863e-06,"max":0.9819283769186368,"metrics":{"A · coral":"0.297","B · jade":"0.288","C · blue":"0.289"}}
+{"slug":"cyclic-life","preset":"Mixing","steps":20000,"time":3199.9999999994093,"finite":true,"min":7.700864070077998e-06,"max":0.9844486248535813,"metrics":{"A · coral":"0.255","B · jade":"0.291","C · blue":"0.366"}}
+{"slug":"cyclic-life","extreme":"minimum","steps":4000,"finite":true,"maxAbs":0.989367894085657}
+{"slug":"cyclic-life","extreme":"maximum","steps":4000,"finite":true,"maxAbs":0.9803843385446719}
+{"slug":"flocking","preset":"Near the transition","steps":2500,"time":2500,"finite":true,"min":0.0006103938099164541,"max":6.282493985975647,"metrics":{"Polarization":"0.347","Particles":700}}
+{"slug":"flocking","preset":"Shared direction","steps":2500,"time":2500,"finite":true,"min":0.0007476724208914654,"max":3.9905769145434395,"metrics":{"Polarization":"0.990","Particles":700}}
+{"slug":"flocking","preset":"Disorder","steps":2500,"time":2500,"finite":true,"min":0.0021374021077136263,"max":6.279030065413247,"metrics":{"Polarization":"0.053","Particles":700}}
+{"slug":"flocking","extreme":"minimum","steps":4000,"finite":true,"maxAbs":3.285022456187444}
+{"slug":"flocking","extreme":"maximum","steps":4000,"finite":true,"maxAbs":6.274261277071111}
+{"slug":"chaotic-surface","preset":"Chaos","steps":100000,"time":3999.9999999969423,"finite":true,"min":-2.5998759142983956,"max":3.1602694855836146,"metrics":{"Mean u":"0.000000","Slope RMS":"1.404","World length L":100}}
+{"slug":"chaotic-surface","preset":"Small world","steps":100000,"time":3999.9999999969423,"finite":true,"min":-2.5084290879532154,"max":2.216287214198447,"metrics":{"Mean u":"-0.000000","Slope RMS":"1.283","World length L":35}}
+{"slug":"chaotic-surface","preset":"Many scales","steps":100000,"time":3999.9999999969423,"finite":true,"min":-2.6927341372144284,"max":2.697554852361269,"metrics":{"Mean u":"0.000000","Slope RMS":"1.348","World length L":160}}
+{"slug":"chaotic-surface","extreme":"minimum","steps":100000,"finite":true,"maxAbs":2.2785369274538683}
+{"slug":"chaotic-surface","extreme":"maximum","steps":100000,"finite":true,"maxAbs":2.870234678823247}
+{"slug":"living-layers","preset":"Opposite shores","steps":1200,"time":72000,"finite":true,"min":0,"max":9.150837361755562,"metrics":{"Time":"20.0 h","Nitrifier share":"67.1%","Occupied volume":"23.8%","State":"Growing / decaying"}}
+{"slug":"living-layers","preset":"Quicker nitrate use","steps":1200,"time":72000,"finite":true,"min":0,"max":9.173982013635376,"metrics":{"Time":"20.0 h","Nitrifier share":"53.3%","Occupied volume":"30.0%","State":"Growing / decaying"}}
+{"slug":"living-layers","preset":"A little oxygen","steps":1200,"time":72000,"finite":true,"min":0,"max":9.016769389054966,"metrics":{"Time":"20.0 h","Nitrifier share":"44.3%","Occupied volume":"24.0%","State":"Growing / decaying"}}
+{"slug":"living-layers","extreme":"minimum","steps":1200,"finite":true,"maxAbs":7.965019997056354}
+{"slug":"living-layers","extreme":"maximum","steps":1200,"finite":true,"maxAbs":8.312007111758149}
+{"summary":{"runs":155,"finite":155}}

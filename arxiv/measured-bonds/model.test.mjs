@@ -1,0 +1,11 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {create} from './model.mjs';
+function valid(m){for(let i=0;i<m.n;i++){const j=m.partner[i];assert.ok(j===-1||(j!==i&&j>=0&&j<m.n&&m.partner[j]===i));}}
+test('Bell swapping reconnects the remote partners and single measurement breaks both ends',()=>{const m=create(1);m.pair(3,61);m.pair(9,84);m.pair(3,9);assert.equal(m.partner[61],84);assert.equal(m.partner[84],61);assert.equal(m.partner[3],9);assert.equal(m.entropy(0,48),0);m.cut(61);assert.equal(m.partner[84],-1);assert.equal(m.partner[61],-1);valid(m);});
+test('a manual Bell measurement changes subsequent matching while preserving one partner per site',()=>{const a=create(9),b=create(9);for(let i=0;i<200;i++){a.step();b.step();}assert.deepEqual(a.values(),b.values());a.interact(a.x[23],a.y[23],'pair');assert.notDeepEqual(a.values(),b.values());for(let i=0;i<12;i++){a.step();b.step();}assert.notDeepEqual(a.values(),b.values());valid(a);valid(b);a.beginInteract(a.x[5],a.y[5],'pair');a.interact(a.x[5],a.y[5],'pair');a.interact(a.x[80],a.y[80],'pair');assert.equal(a.partner[5],80);a.endInteract({cancelled:true});assert.equal(a.anchor,-1);});
+test('stationary pointer samples measure only once, while visiting another site reconnects the anchor',()=>{const m=create(3);m.beginInteract(m.x[5],m.y[5],'pair');m.interact(m.x[5],m.y[5],'pair');const first=m.values();assert.equal(m.operations,1);
+  for(let i=0;i<20;i++)m.interact(m.x[5]+i*1e-6,m.y[5],'pair');assert.deepEqual(m.values(),first);
+  m.interact(m.x[80],m.y[80],'pair');assert.equal(m.partner[5],80);assert.equal(m.operations,2);const target=m.values();
+  for(let i=0;i<20;i++)m.interact(m.x[80],m.y[80],'pair');m.interact(m.x[5],m.y[5],'pair');assert.deepEqual(m.values(),target);
+  m.endInteract({cancelled:true});assert.equal(m.anchor,-1);m.beginInteract(m.x[5],m.y[5],'pair');m.interact(m.x[5],m.y[5],'pair');assert.equal(m.operations,3);valid(m);
+});
+test('long live-corner runs retain exact matching invariants without fabricated particles',()=>{const a=create(7),b=create(7);for(const p of [{reach:0,separate:0},{reach:4,separate:.6}]){a.setParams(p);b.setParams(p);for(let i=0;i<15000;i++){a.step();b.step();}valid(a);assert.deepEqual(a.values(),b.values());assert.ok(a.values().every(Number.isFinite));}});

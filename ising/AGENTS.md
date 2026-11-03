@@ -1,17 +1,7 @@
-# Ising Field
+## General principles > heuristics
 
-Source lives in `app/`. Root `index.html` and `assets/` are Vite build outputs
-and must not be edited by hand.
+If a user presents a set of conflicting requirements, do not simply turn them into a collection of heuristics; instead, try to identify an underlying principle and implement that in the code.
 
-Keep the physical state and all per-cell work on WebGPU. JavaScript may schedule
-passes, handle input, and aggregate the small GPU statistics readback. A new
-state is raw independent random spins; opening warm-up is a separate action.
+## Rules
 
-Build from `ising/app` with `npm run build`. Preview only through the parent
-repository's `./scripts/preview` command.
-
-## Общие принципы > эвристик
-
-Если пользователь предлагает набор противоречащих требований, то не превращай их в кучу эвристик, попробуй найти общий принцип и воплотить его в коде.
-
-## Правила
+English is default interface language

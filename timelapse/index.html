@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#181b1a">
+  <meta name="description" content="Align photos taken from one viewpoint, create a timelapse video or a striped collage. Processed in your browser.">
+  <link rel="icon" href="/img/favicon.png">
+  <link rel="stylesheet" href="./editor.css">
+  <title>Timelapse — one place, different times</title>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="../" aria-label="Back to Playground">t<span> / </span>l</a>
+    <div class="title"><h1>Timelapse</h1><span>One place. Different times.</span></div>
+    <div class="save-state" id="save-state" role="status">Everything stays in this browser</div>
+    <button class="quiet" id="examples">Load examples <span>↗</span></button>
+  </header>
+
+  <main class="workspace">
+    <section class="studio" aria-label="Preview">
+      <div class="studio-toolbar">
+        <div class="tabs" role="tablist" aria-label="Preview mode">
+          <button role="tab" aria-selected="true" id="mode-frame" data-mode="frame">Frame</button>
+          <button role="tab" aria-selected="false" id="mode-video" data-mode="video">Slideshow</button>
+          <button role="tab" aria-selected="false" id="mode-strips" data-mode="strips">Stripes</button>
+        </div>
+        <span id="canvas-meta" class="mono">NO FRAMES</span>
+      </div>
+      <div class="stage" id="stage">
+        <canvas id="preview" aria-label="Edited photo preview"></canvas>
+        <div id="crop-frame" class="crop-frame" role="group" tabindex="0" aria-label="Crop selection. Drag to move or use arrow keys." aria-describedby="crop-hint" hidden>
+          <div class="crop-grid" aria-hidden="true"></div>
+          <button type="button" data-corner="nw" aria-label="Resize crop from top left" class="crop-handle nw"></button>
+          <button type="button" data-corner="ne" aria-label="Resize crop from top right" class="crop-handle ne"></button>
+          <button type="button" data-corner="sw" aria-label="Resize crop from bottom left" class="crop-handle sw"></button>
+          <button type="button" data-corner="se" aria-label="Resize crop from bottom right" class="crop-handle se"></button>
+        </div>
+        <div id="coverage-legend" class="coverage-legend" aria-label="Aligned frame coverage" hidden><span class="bounds-key">Frame bounds</span><span class="shared-key">Shared area</span></div>
+        <div id="anchor-overlay" class="anchor-overlay" hidden aria-label="Alignment regions on the reference photo"></div>
+        <div id="anchor-legend" class="coverage-legend anchor-legend" hidden><span class="detected-key">Detected points</span><span class="used-key">Used matches</span></div>
+        <div class="empty" id="empty">
+          <div class="empty-mark" aria-hidden="true"><i></i><i></i><i></i></div>
+          <h2>Bring time into a single frame</h2>
+          <p>Add photos taken from the same viewpoint.<br>The editor aligns matching details across frames.</p>
+          <button class="primary" id="empty-add">＋ Add photos</button>
+          <button class="text-button" id="empty-examples">Try 24 example photos</button>
+        </div>
+        <div class="stage-badge" id="stage-badge" hidden></div>
+        <div class="drop-overlay" id="drop-overlay" hidden>Drop photos here</div>
+      </div>
+      <div class="transport">
+        <div class="transport-buttons">
+          <button id="previous" class="icon-button" aria-label="Previous frame">‹</button>
+          <button id="play" class="play-button" aria-label="Play">▶</button>
+          <button id="next" class="icon-button" aria-label="Next frame">›</button>
+          <span id="frame-counter" class="mono">00 / 00</span>
+        </div>
+        <label class="compare"><input type="checkbox" id="compare"> Compare with reference</label>
+      </div>
+      <div class="notice" id="notice" role="status" aria-live="polite">Add photos or load the examples to get started.</div>
+    </section>
+
+    <aside class="controls" aria-label="Editor settings">
+      <section class="control-section">
+        <div class="section-title"><h2>Alignment</h2><span class="step">01</span></div>
+        <label class="toggle"><span>Align matching details</span><input type="checkbox" id="align-enabled" checked></label>
+        <div class="field-row"><label for="region">Search region</label><select id="region"><option value="ground">Lower 70% · exclude sky</option><option value="all">Whole image</option><option value="custom">Custom regions</option></select></div>
+        <button class="wide-button" id="edit-anchors" aria-pressed="false">Edit anchors</button>
+        <div id="anchor-tools" class="anchor-tools" hidden>
+          <div class="anchor-actions"><button id="add-anchor" class="wide-button" aria-pressed="false">＋ Draw region</button><button id="reset-anchors" class="text-button">Reset auto</button></div>
+          <div id="anchor-list" class="anchor-list" role="group" aria-label="Alignment regions"></div>
+          <button id="remove-anchor" class="text-button danger">Remove selected region</button>
+          <label class="toggle subtle"><span>Show detected points</span><input type="checkbox" id="show-anchor-points" checked></label>
+          <p class="hint" id="anchor-hint">Use static landmarks on the reference photo. Drag a region to move it, or drag a corner to resize. Changes apply when you click Align frames.</p>
+        </div>
+        <p class="hint" id="anchor-summary">Automatic search area · lower 70%</p>
+        <button class="wide-button" id="align">↗ Align frames</button>
+        <label class="toggle subtle"><span>Crop output</span><input type="checkbox" id="crop" checked></label>
+        <div class="crop-actions"><button class="wide-button" id="edit-crop" aria-pressed="false">Edit crop</button><button class="text-button" id="reset-crop" title="Reset to the shared area of all frames">Auto</button></div>
+        <div class="range-field" id="crop-size-field"><label for="crop-size">Crop size <output id="crop-size-value">100%</output></label><input id="crop-size" type="range" min="5" max="100" step="0.5" value="100"></div>
+        <p class="hint" id="crop-hint">One crop for every frame. Drag to move; drag a corner to resize. Outlines show all aligned frames; green marks their shared area.</p>
+        <p class="hint" id="crop-summary">Automatic · shared area</p>
+        <p class="hint" id="alignment-summary">The first photo becomes the reference.</p>
+      </section>
+
+      <section class="control-section">
+        <div class="section-title"><h2>Light & color</h2><span class="step">02</span></div>
+        <label class="toggle"><span>Match exposure</span><input type="checkbox" id="auto-exposure"></label>
+        <div class="range-field"><label for="exposure-strength">Correction strength <output id="exposure-strength-value">100%</output></label><input id="exposure-strength" type="range" min="0" max="1" step="0.01" value="1"></div>
+        <p class="hint" id="exposure-summary">Based on shared areas of the reference frame.</p>
+      </section>
+
+      <section class="control-section selected-section">
+        <div class="section-title"><h2>Selected frame</h2><button class="text-button" id="reset-frame">Reset</button></div>
+        <div class="selected-name" id="selected-name">No frame selected</div>
+        <div class="range-field"><label for="ev">Exposure <output id="ev-value">0 EV</output></label><input id="ev" type="range" min="-3" max="3" step="0.05" value="0"></div>
+        <div class="range-field"><label for="contrast">Contrast <output id="contrast-value">100%</output></label><input id="contrast" type="range" min="0.5" max="1.8" step="0.01" value="1"></div>
+        <div class="range-field"><label for="saturation">Saturation <output id="saturation-value">100%</output></label><input id="saturation" type="range" min="0" max="2" step="0.01" value="1"></div>
+        <details id="geometry"><summary>Position & scale <span>＋</span></summary>
+          <div class="geometry-grid">
+            <label>Offset X, %<input id="shift-x" type="number" min="-100" max="100" step="0.1" value="0"></label>
+            <label>Offset Y, %<input id="shift-y" type="number" min="-100" max="100" step="0.1" value="0"></label>
+            <label>Rotation, °<input id="rotation" type="number" min="-180" max="180" step="0.05" value="0"></label>
+            <label>Scale, %<input id="scale" type="number" min="25" max="400" step="0.1" value="100"></label>
+          </div>
+        </details>
+        <button class="text-button reference-button" id="make-reference">Use as reference</button>
+      </section>
+
+      <section class="control-section export-section">
+        <div class="section-title"><h2>Output</h2><span class="step">03</span></div>
+        <div class="field-row"><label for="fps">Frames per second</label><input type="number" id="fps" min="0.2" max="60" step="0.2" value="4"></div>
+        <p class="hint" id="duration">0 frames · 0 s</p>
+        <div class="field-row"><label for="resolution">Longest side</label><select id="resolution"><option value="1280">1280 px</option><option value="1920" selected>1920 px</option><option value="2560">2560 px</option><option value="original">Original</option></select></div>
+        <div class="strip-controls">
+          <div class="field-row"><label for="direction">Stripe direction</label><select id="direction"><option value="90">Vertical ↔</option><option value="0">Horizontal ↕</option><option value="45">Diagonal ↗</option><option value="135">Diagonal ↘</option><option value="custom">Custom angle…</option></select></div>
+          <div class="range-field" id="angle-field" hidden><label for="angle">Angle <output id="angle-value">90°</output></label><input id="angle" type="range" min="0" max="180" step="1" value="90"></div>
+          <label class="toggle subtle"><span>Reverse stripe order</span><input type="checkbox" id="reverse-strips"></label>
+        </div>
+        <button class="primary wide" id="export-video">↓ Download MP4</button>
+        <button class="wide-button" id="export-collage">↓ Save collage · JPEG</button>
+        <button class="text-button cancel-button" id="cancel" hidden>Cancel</button>
+        <progress id="progress" max="1" value="0" hidden></progress>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="filmstrip">
+    <div class="filmstrip-heading"><div><span class="eyebrow">SEQUENCE</span> <span id="photo-count">0 frames</span></div><div class="sequence-actions"><button class="text-button" id="sort">Name ↑</button><button class="text-button" id="reverse">Reverse</button><button class="text-button danger" id="clear">Clear</button></div></div>
+    <div class="timeline-row"><div id="timeline" class="timeline" role="list" aria-label="Photo sequence"></div><button class="add-tile" id="add"><span>＋</span>Add<br>photos</button></div>
+    <div class="filmstrip-bottom"><span>Drag frames to change their order</span><div><button id="move-left" class="text-button">← Move left</button><button id="move-right" class="text-button">Move right →</button><button id="remove" class="text-button danger">Remove frame</button></div></div>
+  </footer>
+  <input type="file" id="files" accept="image/jpeg,image/png,image/webp,image/avif" multiple hidden>
+  <script type="module" src="./editor.mjs"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+// Regenerate the static entry pages after editing catalog.mjs.
+// Models and shared browser modules are served directly, without a bundler.
+import { writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { experiments } from './catalog.mjs';
+const root=fileURLToPath(new URL('.',import.meta.url));
+const head=(title,description,css)=>`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#080d13"><meta name="description" content="${description}"><title>${title}</title><link rel="stylesheet" href="${css}"></head>`;
+for(const item of experiments){
+  writeFileSync(`${root}${item.slug}/index.html`,`${head(item.title,item.hook,'../shared/lab.css')}<body data-experiment="${item.slug}"><noscript>JavaScript is required to run this model. <a href="../">Back to the atlas</a>.</noscript><script type="module" src="../shared/lab.mjs"></script></body></html>\n`);
+  writeFileSync(`${root}${item.slug}/README.md`,`# ${item.title}\n\n${item.short}. ${item.hook}\n\n${item.watch}\n\n## Source\n\n${item.paper.authors}. [${item.paper.title}](https://arxiv.org/abs/${item.paper.id}) (${item.paper.year}).\n\n## Implementation\n\n\`\`\`text\n${item.equation}\n\`\`\`\n\n${item.limit}\n\n${item.gesture} You can also drag with the main mouse button held down, or draw with a finger.\n\nOpen through the shared preview: http://127.0.0.1:4000/arxiv/${item.slug}/\n\nModel: \`model.mjs\`. Shared interface and renderer: \`../shared/\`. The page supports pause, single steps, replay with the same seed, a new seed, speed and presets. The URL reproduces the starting world and parameters; elapsed time is not stored.\n`);
+}
+const card=(item,i)=>`<article class="experiment"><a class="image" href="${item.slug}/" aria-label="Open: ${item.title}"><img src="previews/${item.slug}.jpg" alt="${item.short}: a snapshot of the running model" width="900" height="600" ${i>1?'loading="lazy"':''}></a><div class="caption"><h2><a href="${item.slug}/">${item.title}</a></h2></div><div class="tag">${item.short}</div><p>${item.hook}</p><a class="paper-link" href="https://arxiv.org/abs/${item.paper.id}" target="_blank" rel="noreferrer">${item.paper.authors} · ${item.paper.year} ↗</a></article>`;
+const additions=experiments.filter(item=>item.newExploration),earlier=experiments.filter(item=>!item.newExploration);
+const section=(title,items)=>items.length?`<section class="collection"><h2 class="collection-title">${title}</h2><div class="gallery">${items.map(card).join('')}</div></section>`:'';
+writeFileSync(`${root}index.html`,`${head('An Atlas of Emergent Worlds · arXiv / Playground','Interactive models from arXiv papers for computational contemplation.','./gallery.css')}<body>
+<header><span class="eyebrow">PLAYGROUND / ARXIV</span><a href="../">Back to Playground ↗</a></header>
+<section class="intro"><div class="eyebrow">MODELS FOR COMPUTATIONAL CONTEMPLATION</div><h1>Watching a world emerge</h1><p>Each system has a short rule and a long unfolding. You can simply watch, or change a condition and stay with the consequences.</p>${additions.length?'<p class="start">Follow what lasts, what changes, and what is left behind.</p>':'<p class="start">Start with <a href="gray-scott/">a garden that eats itself</a>, <a href="cyclic-life/">a world where nobody wins</a> or <a href="chaotic-surface/">a fabric that never repeats</a>.</p>'}</section>
+<main>${section('New explorations',additions)}${section(additions.length?'Earlier models':'The models',earlier)}</main>
+<footer>Based on papers from <a href="https://arxiv.org/">arXiv</a>, spanning several decades. Each page explains its rule, approximations and source. Every state is calculated in your browser; previews are snapshots of those calculations. <a href="README.md">Implementation and checks ↗</a></footer></body></html>\n`);

@@ -1,0 +1,51 @@
+{"slug":"measured-bonds","preset":"Distant partners","steps":12000,"time":12000,"finite":true,"min":-1,"max":11351,"metrics":{"Threads":36,"Loose ends":24,"Across the middle":6,"Measurement events":12000}}
+{"slug":"measured-bonds","preset":"Mostly nearby","steps":12000,"time":12000,"finite":true,"min":-1,"max":9154,"metrics":{"Threads":38,"Loose ends":20,"Across the middle":1,"Measurement events":12000}}
+{"slug":"measured-bonds","preset":"More loose ends","steps":12000,"time":12000,"finite":true,"min":-1,"max":10060,"metrics":{"Threads":27,"Loose ends":42,"Across the middle":3,"Measurement events":12000}}
+{"slug":"measured-bonds","extreme":"minimum","steps":12000,"finite":true,"maxAbs":11888}
+{"slug":"measured-bonds","extreme":"maximum","steps":12000,"finite":true,"maxAbs":6563}
+{"slug":"rejoining-fields","preset":"Two islands","steps":1800,"time":3.599999999999825,"finite":true,"min":-5.399192944690329,"max":5.399192944690305,"metrics":{"Magnetic energy":"0.0572","Fluid energy":"0.0031","Island flux":"0.0041","Peak current":"9.0"}}
+{"slug":"rejoining-fields","preset":"Viscous meeting","steps":1800,"time":3.599999999999825,"finite":true,"min":-2.45019585800303,"max":2.450195858003021,"metrics":{"Magnetic energy":"0.0532","Fluid energy":"0.0005","Island flux":"0.0143","Peak current":"16.0"}}
+{"slug":"rejoining-fields","preset":"Easier reconnection","steps":1800,"time":3.599999999999825,"finite":true,"min":-1.7289636898029552,"max":1.7289636898029443,"metrics":{"Magnetic energy":"0.0441","Fluid energy":"0.0025","Island flux":"0.0000","Peak current":"3.9"}}
+{"slug":"rejoining-fields","extreme":"minimum","steps":1800,"finite":true,"maxAbs":37.40376681137322}
+{"slug":"rejoining-fields","extreme":"maximum","steps":1800,"finite":true,"maxAbs":0.18796511718937928}
+{"slug":"granular-intruder","preset":"A hesitant passage","steps":1800,"time":54.00000000000199,"finite":true,"min":-0.19969617460388872,"max":54.00000000000199,"metrics":{"Applied rocking force":"12.0","Grain contacts":"560","Intruder speed":"0.17"}}
+{"slug":"granular-intruder","preset":"Loose ground","steps":1800,"time":54.00000000000199,"finite":true,"min":-0.2517011574186871,"max":54.00000000000199,"metrics":{"Applied rocking force":"12.0","Grain contacts":"496","Intruder speed":"0.18"}}
+{"slug":"granular-intruder","preset":"Rapid rocking","steps":1800,"time":54.00000000000199,"finite":true,"min":-0.0784403261739168,"max":54.00000000000199,"metrics":{"Applied rocking force":"12.0","Grain contacts":"478","Intruder speed":"0.04"}}
+{"slug":"granular-intruder","extreme":"minimum","steps":1800,"finite":true,"maxAbs":54.00000000000199}
+{"slug":"granular-intruder","extreme":"maximum","steps":1800,"finite":true,"maxAbs":54.00000000000199}
+{"slug":"separate-futures","preset":"Nearby futures","steps":800,"time":800,"finite":true,"min":0,"max":4026531848,"metrics":{"Population":730,"Genetic groups":3,"No mate":10,"Generation":800}}
+{"slug":"separate-futures","preset":"Stricter pairings","steps":800,"time":800,"finite":true,"min":0,"max":4161274948,"metrics":{"Population":666,"Genetic groups":17,"No mate":34,"Generation":800}}
+{"slug":"separate-futures","preset":"Infinite genome","steps":800,"time":800,"finite":true,"min":0,"max":800,"metrics":{"Population":698,"Genetic groups":8,"No mate":19,"Generation":800}}
+{"slug":"separate-futures","extreme":"minimum","steps":800,"finite":true,"maxAbs":4194437124}
+{"slug":"separate-futures","extreme":"maximum","steps":800,"finite":true,"maxAbs":3221225474}
+{"slug":"pinned-boundaries","preset":"Held grains","steps":1200,"time":47.999999999999154,"finite":true,"min":-1,"max":47.999999999999154,"metrics":{"Grains remaining":12,"Particles":27,"Boundary length":"6.93","Released":0}}
+{"slug":"pinned-boundaries","preset":"Without particles","steps":1200,"time":47.999999999999154,"finite":true,"min":-1,"max":47.999999999999154,"metrics":{"Grains remaining":12,"Particles":0,"Boundary length":"7.22","Released":0}}
+{"slug":"pinned-boundaries","preset":"Dissolving particles","steps":1200,"time":47.999999999999154,"finite":true,"min":-1,"max":47.999999999999154,"metrics":{"Grains remaining":12,"Particles":27,"Boundary length":"7.14","Released":0}}
+{"slug":"pinned-boundaries","extreme":"minimum","steps":1200,"finite":true,"maxAbs":47.999999999999154}
+{"slug":"pinned-boundaries","extreme":"maximum","steps":1200,"finite":true,"maxAbs":47.999999999999154}
+{"slug":"measured-ascent","preset":"Read only the edge","steps":1800,"time":90.00000000000334,"finite":true,"min":-0.23298734097602888,"max":91,"metrics":{"Wall ascent":"91 sites","Measurements":47,"Retained coherence":"1.276","Recorded information":"59.67 nat"}}
+{"slug":"measured-ascent","preset":"Read every position","steps":1800,"time":90.00000000000334,"finite":true,"min":-0.23130052263976486,"max":120.2384441801064,"metrics":{"Wall ascent":"56 sites","Measurements":47,"Retained coherence":"1.228","Recorded information":"120.24 nat"}}
+{"slug":"measured-ascent","preset":"No measurements","steps":1800,"time":90.00000000000334,"finite":true,"min":-0.3622572107132779,"max":2,"metrics":{"Wall ascent":"0 sites","Measurements":0,"Retained coherence":"1.741","Recorded information":"0.00 nat"}}
+{"slug":"measured-ascent","extreme":"minimum","steps":1800,"finite":true,"maxAbs":128}
+{"slug":"measured-ascent","extreme":"maximum","steps":1800,"finite":true,"maxAbs":32.09155802750735}
+{"slug":"spiral-territories","preset":"Two sources","steps":1600,"time":153.60000000000227,"finite":true,"min":0,"max":2.142283154249182,"metrics":{"Active tissue":"47.8%","Recovering tissue":"68.3%","Spiral centres":2}}
+{"slug":"spiral-territories","preset":"A slower recovery","steps":1600,"time":153.60000000000227,"finite":true,"min":0,"max":2.1539760205462417,"metrics":{"Active tissue":"53.3%","Recovering tissue":"69.0%","Spiral centres":2}}
+{"slug":"spiral-territories","preset":"One broken front","steps":1600,"time":153.60000000000227,"finite":true,"min":0,"max":2.1419954493776405,"metrics":{"Active tissue":"49.5%","Recovering tissue":"65.9%","Spiral centres":1}}
+{"slug":"spiral-territories","extreme":"minimum","steps":1600,"finite":true,"maxAbs":2.145474846640793}
+{"slug":"spiral-territories","extreme":"maximum","steps":1600,"finite":true,"maxAbs":2.1468414584275255}
+{"slug":"cornerstone-flow","preset":"An uncertain opening","steps":1800,"time":64.79999999990301,"finite":true,"min":-0.013821844667266723,"max":64.79999999990301,"metrics":{"Grains discharged":"44","Since the last exit":"35.3 s","Contact load links":"415"}}
+{"slug":"cornerstone-flow","preset":"A wider passage","steps":1800,"time":64.79999999990301,"finite":true,"min":-6.890570565743783,"max":493,"metrics":{"Grains discharged":"493","Since the last exit":"0.3 s","Contact load links":"20"}}
+{"slug":"cornerstone-flow","preset":"A cornerstone nearer the gap","steps":1800,"time":64.79999999990301,"finite":true,"min":-0.02639679358226534,"max":64.79999999990301,"metrics":{"Grains discharged":"6","Since the last exit":"61.2 s","Contact load links":"426"}}
+{"slug":"cornerstone-flow","extreme":"minimum","steps":1800,"finite":true,"maxAbs":102}
+{"slug":"cornerstone-flow","extreme":"maximum","steps":1800,"finite":true,"maxAbs":537}
+{"slug":"curved-crystal","preset":"Two uneven meetings","steps":1000,"time":75.0000000000014,"finite":true,"min":-0.062331444698848625,"max":3.197831710184279,"metrics":{"Dislocation cores":"0","Free energy":"-31.258","Highest support":"3.20"}}
+{"slug":"curved-crystal","preset":"A flat support","steps":1000,"time":75.0000000000014,"finite":true,"min":-0.05389392380001702,"max":0.129668450047587,"metrics":{"Dislocation cores":"0","Free energy":"-30.948","Highest support":"0.00"}}
+{"slug":"curved-crystal","preset":"A steeper support","steps":1000,"time":75.0000000000014,"finite":true,"min":-0.07791537594543264,"max":5.756097078331702,"metrics":{"Dislocation cores":"0","Free energy":"-31.469","Highest support":"5.76"}}
+{"slug":"curved-crystal","extreme":"minimum","steps":1000,"finite":true,"maxAbs":0.16616553174388063}
+{"slug":"curved-crystal","extreme":"maximum","steps":1000,"finite":true,"maxAbs":6.395663420368558}
+{"slug":"renewing-direction","preset":"Direction outlasts material","steps":18000,"time":300.0000000000558,"finite":true,"min":-1,"max":70,"metrics":{"Rightward filaments":"85%","Original filaments":"0 / 60","Replacements":2435,"Mean length":"12.7 \u03bcm"}}
+{"slug":"renewing-direction","preset":"Without nucleation feedback","steps":18000,"time":300.0000000000558,"finite":true,"min":-1,"max":70,"metrics":{"Rightward filaments":"60%","Original filaments":"0 / 60","Replacements":2207,"Mean length":"13.2 \u03bcm"}}
+{"slug":"renewing-direction","preset":"A divided beginning","steps":18000,"time":300.0000000000558,"finite":true,"min":-1,"max":82,"metrics":{"Rightward filaments":"98%","Original filaments":"0 / 60","Replacements":3240,"Mean length":"10.9 \u03bcm"}}
+{"slug":"renewing-direction","extreme":"minimum","steps":18000,"finite":true,"maxAbs":70}
+{"slug":"renewing-direction","extreme":"maximum","steps":18000,"finite":true,"maxAbs":80}
+{"summary": {"runs": 50, "finite": 50}}

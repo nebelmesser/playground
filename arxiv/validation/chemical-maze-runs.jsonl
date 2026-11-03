@@ -1,0 +1,6 @@
+{"slug":"chemical-echo","preset":"Branching maze","steps":1200,"time":144.00000000000242,"finite":true,"min":0,"max":1728.000000000368,"metrics":{"Chemical in water":"1684.4","Released / drained":"1728.0 / 43.6","Drop speed":"0.96"}}
+{"slug":"chemical-echo","preset":"Looping passages","steps":1200,"time":144.00000000000242,"finite":true,"min":-2.5826097801208743,"max":1728.000000000368,"metrics":{"Chemical in water":"1725.4","Released / drained":"1728.0 / 2.6","Drop speed":"2.58"}}
+{"slug":"chemical-echo","preset":"An open bath","steps":1200,"time":144.00000000000242,"finite":true,"min":0,"max":1728.000000000368,"metrics":{"Chemical in water":"1682.7","Released / drained":"1728.0 / 45.3","Drop speed":"0.86"}}
+{"slug":"chemical-echo","extreme":"minimum","steps":1200,"finite":true,"maxAbs":1728.000000000368}
+{"slug":"chemical-echo","extreme":"maximum","steps":1200,"finite":true,"maxAbs":1728.000000000368}
+{"summary":{"runs":5,"finite":5}}

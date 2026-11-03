@@ -1,0 +1,16 @@
+✔ one agent moves through its own chemical feedback and reaches the reservoir (2256.337375ms)
+✔ painting displaces chemical, erasing and moving preserve mass and field history (493.702208ms)
+✔ a reflecting wall blocks chemical exactly; opening a tunnel changes the route (750.394958ms)
+✔ emission and sensed force cannot reach through a thin wall next to the drop (105.059875ms)
+✔ fixed logarithmic brightness is unchanged by a remote concentration peak (60.848917ms)
+✔ the same geometry and drop placement retain a different future after a previous visit (1315.443167ms)
+✔ determinism and live diffusion changes affect the continuing field (468.43175ms)
+✔ presets, parameter corners, and repeated tools stay finite with an exact mass ledger (8237.054625ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 13745.331
