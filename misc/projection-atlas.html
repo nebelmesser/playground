@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <link rel="icon" type="image/png" href="/img/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Интерактивный атлас картографических проекций с плавным морфингом и экспортом видео">
+  <title>Атлас искажений — Projection Lab</title>
+  <link rel="stylesheet" href="projection-atlas/atlas.css">
+</head>
+<body>
+  <div class="app">
+    <main class="layout">
+      <section class="stage">
+        <div class="section-label"><span data-i18n="preview">Предпросмотр</span><span class="extra">1920 × 1920</span></div>
+        <div class="stage-frame"><div class="canvas-wrap">
+          <canvas id="mapCanvas" width="960" height="960" aria-label="Morphing map projections animation"></canvas>
+        </div></div>
+        <div class="transport">
+          <button type="button" class="transport-button primary" id="playBtn" title="Воспроизвести" aria-label="Воспроизвести"><span id="playIcon">▶</span></button>
+          <button type="button" class="transport-button" id="restartBtn" title="С начала" aria-label="С начала">↺</button>
+          <button type="button" class="transport-button selected" id="loopBtn" title="Зациклить" aria-label="Зациклить" aria-pressed="true">∞</button>
+          <div class="seek-area">
+            <input type="range" id="seek" class="seek" min="0" max="1000" step="1" value="0" aria-label="Seek video preview">
+            <span id="timeReadout" class="time-readout">00:00 / 00:35</span>
+          </div>
+        </div>
+      </section>
+      <aside class="sidebar">
+        <section class="panel">
+          <div class="panel-header"><h2 data-i18n="sequence">Последовательность</h2><span id="sequenceCount" class="counter">07</span></div>
+          <ol class="sequence-list" id="sequenceList"></ol>
+          <p class="panel-hint" data-i18n="instructions">Перетаскивайте карточки или меняйте порядок стрелками. Можно повторять проекции.</p>
+          <label class="field-label" for="projectionToAdd" data-i18n="add">Добавить проекцию</label>
+          <div class="add-row">
+            <select class="field-select" id="projectionToAdd"></select>
+            <button type="button" class="add-button" id="addProjectionBtn" aria-label="Добавить">+</button>
+          </div>
+          <button type="button" id="resetSequence" class="subtle-button" data-i18n="reset">Сбросить порядок</button>
+        </section>
+        <section class="panel">
+          <div class="panel-header"><h2 data-i18n="settings">Настройки ролика</h2></div>
+          <div class="fields">
+            <div>
+              <label class="field-label" for="durationInput" data-i18n="total">Общая длительность</label>
+              <div class="number-row"><input id="durationInput" class="field-number" type="number" min="5" max="300" step="1" value="35"><span class="unit" data-i18n="seconds">секунд</span></div>
+            </div>
+            <div>
+              <label class="field-label" for="morphInput" data-i18n="morph">Длительность морфинга</label>
+              <div class="number-row"><input id="morphInput" class="field-number" type="number" min="0.1" max="5.8" step="0.1" value="4.3" aria-describedby="morphHelp"><span class="unit" data-i18n="seconds">секунд</span></div>
+              <p id="morphHelp" class="timing-help"></p>
+            </div>
+            <div>
+              <label class="toggle-field"><input id="hideLabels" type="checkbox"><span data-i18n="hideLabels">Скрыть все подписи</span></label>
+              <p class="toggle-help" data-i18n="hideLabelsHint">Только карта и координатная сетка на весь кадр.</p>
+            </div>
+            <div>
+              <label class="toggle-field"><input id="videoLoop" type="checkbox"><span data-i18n="videoLoop">Зациклить видео</span></label>
+              <p class="toggle-help" data-i18n="videoLoopHint">Плавный переход от последней проекции к первой.</p>
+            </div>
+            <div><label class="field-label" for="uiLanguage" data-i18n="uiLang">Язык интерфейса</label>
+              <select id="uiLanguage" class="field-select field-control"><option value="ru">Русский</option><option value="en">English</option></select></div>
+            <div><label class="field-label" for="videoLanguage" data-i18n="videoLang">Язык подписей в видео</label>
+              <select id="videoLanguage" class="field-select field-control"><option value="ru">Русский</option><option value="en">English</option></select></div>
+          </div>
+          <details class="source-details">
+            <summary><span data-i18n="source">Источник силуэтов</span><strong id="sourceStatus">—</strong></summary>
+            <div class="source-body">
+              <p data-i18n="uploadHint">Можно использовать свой исходный BlankMap-Equirectangular.svg.</p>
+              <label class="file-picker"><span data-i18n="upload">Загрузить SVG</span><input id="svgUpload" type="file" accept=".svg,image/svg+xml"></label>
+              <a class="source-url" target="_blank" rel="noopener noreferrer" href="https://commons.wikimedia.org/wiki/File:BlankMap-Equirectangular.svg">BlankMap-Equirectangular.svg · CC0</a>
+            </div>
+          </details>
+        </section>
+        <section class="panel">
+          <div class="panel-header"><h2 data-i18n="output">Экспорт</h2></div>
+          <div class="fields">
+            <div><label class="field-label" for="formatSelect" data-i18n="outputFormat">Формат</label>
+              <select id="formatSelect" class="field-select field-control"><option value="auto">Авто · MP4 / WebM</option><option value="mp4">MP4</option><option value="webm">WebM</option></select></div>
+            <div>
+              <button type="button" id="exportBtn" class="export-button"><span class="export-icon">⇩</span><span data-i18n="exportBtn">Сохранить видео</span></button>
+              <div class="resolution-note" data-i18n="resolution">Квадрат · 1920 × 1920 · до 30 кадров/с</div>
+              <div class="status" id="status" role="status">—</div>
+              <div id="exportProgress" class="progress-rail hidden"><div id="exportProgressBar" class="progress-bar"></div></div>
+              <p id="recordingNote" class="recording-note hidden" data-i18n="videoRecording">Во время записи не переключайте вкладку.</p>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </main>
+    <footer class="app-footer" data-i18n="credit">Плавный переход по географическим координатам · все расчёты локально в браузере</footer>
+  </div>
+  <script type="module" src="projection-atlas/atlas.js"></script>
+</body>
+</html>
