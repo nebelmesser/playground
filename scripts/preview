@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+"""Manage the single Jekyll preview at http://127.0.0.1:4000/."""
+
+import fcntl
+import os
+from pathlib import Path
+import shutil
+import signal
+import socket
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+
+
+ROOT = Path(__file__).resolve().parent.parent
+STATE = ROOT / ".preview"
+PID_FILE = STATE / "jekyll.pid"
+LOG_FILE = STATE / "jekyll.log"
+URL = "http://127.0.0.1:4000/"
+HTTP = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def belongs_to_preview(pid):
+    if pid <= 1:
+        return False
+    process = subprocess.run(
+        ["ps", "-p", str(pid), "-o", "command="],
+        capture_output=True, text=True, check=False,
+    )
+    command = process.stdout.strip()
+    if process.returncode or "jekyll" not in command or "serve" not in command:
+        return False
+    directory = subprocess.run(
+        ["lsof", "-a", "-p", str(pid), "-d", "cwd", "-Fn"],
+        capture_output=True, text=True, check=False,
+    )
+    return "n" + str(ROOT) in directory.stdout.splitlines()
+
+
+def running_pid():
+    try:
+        pid = int(PID_FILE.read_text().strip())
+    except (FileNotFoundError, ValueError):
+        pid = 0
+    if belongs_to_preview(pid):
+        return pid
+    # Adopt this checkout's existing Jekyll instead of starting another copy.
+    listener = subprocess.run(
+        ["lsof", "-nP", "-t", "-iTCP:4000", "-sTCP:LISTEN"],
+        capture_output=True, text=True, check=False,
+    )
+    for candidate in listener.stdout.splitlines():
+        if candidate.isdigit() and belongs_to_preview(int(candidate)):
+            PID_FILE.write_text(candidate + "\n")
+            return int(candidate)
+    return None
+
+
+def ready():
+    try:
+        with HTTP.open(URL, timeout=1) as response:
+            return response.status == 200
+    except (OSError, urllib.error.URLError):
+        return False
+
+
+def port_in_use():
+    with socket.socket() as connection:
+        connection.settimeout(1)
+        return connection.connect_ex(("127.0.0.1", 4000)) == 0
+
+
+def stop(pid):
+    os.kill(pid, signal.SIGTERM)
+    for _ in range(50):
+        if running_pid() != pid:
+            PID_FILE.unlink(missing_ok=True)
+            return
+        time.sleep(0.1)
+    raise RuntimeError(f"Preview has not stopped (PID {pid}); see {LOG_FILE}")
+
+
+def start():
+    pid = running_pid()
+    if pid:
+        print(f"Preview already running (PID {pid}): {URL}")
+        return
+    if port_in_use():
+        raise RuntimeError("Port 4000 is already in use; no second server was started.")
+    PID_FILE.unlink(missing_ok=True)
+    environment = os.environ.copy()
+    ruby_bin = Path("/opt/homebrew/opt/ruby@3.3/bin")
+    if (ruby_bin / "ruby").is_file():
+        environment["PATH"] = str(ruby_bin) + os.pathsep + environment["PATH"]
+    bundle = shutil.which("bundle", path=environment.get("PATH"))
+    if not bundle:
+        raise RuntimeError("Bundler is missing. Install Ruby and Bundler first.")
+    dependencies = subprocess.run(
+        [bundle, "check"], cwd=ROOT, env=environment,
+        capture_output=True, text=True, check=False,
+    )
+    if dependencies.returncode:
+        raise RuntimeError("Jekyll dependencies are missing. Run `bundle install` first.\n"
+                           + dependencies.stdout + dependencies.stderr)
+    with LOG_FILE.open("w") as log:
+        process = subprocess.Popen(
+            [bundle, "exec", "jekyll", "serve",
+             "--config", "_config.yml,_config.preview.yml",
+             "--source", str(ROOT), "--host", "127.0.0.1",
+             "--port", "4000", "--baseurl", ""],
+            cwd=ROOT, env=environment, stdin=subprocess.DEVNULL,
+            stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+        )
+    PID_FILE.write_text(str(process.pid) + "\n")
+    for _ in range(150):
+        if process.poll() is not None:
+            PID_FILE.unlink(missing_ok=True)
+            raise RuntimeError("Preview failed to start:\n" + LOG_FILE.read_text())
+        if ready():
+            print(f"Preview started (PID {process.pid}): {URL}\nLog: {LOG_FILE}")
+            return
+        time.sleep(0.2)
+    stop(process.pid)
+    raise RuntimeError(f"Preview did not become ready; see {LOG_FILE}")
+
+
+def main():
+    action = sys.argv[1] if len(sys.argv) == 2 else "up"
+    if len(sys.argv) > 2 or action not in ("up", "status", "down"):
+        print("Usage: ./scripts/preview [up|status|down]", file=sys.stderr)
+        return 2
+    STATE.mkdir(exist_ok=True)
+    # The kernel releases this lock even if startup is interrupted.
+    with (STATE / "preview.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if action == "up":
+            start()
+        elif action == "down":
+            pid = running_pid()
+            if pid:
+                stop(pid)
+                print("Preview stopped.")
+            else:
+                PID_FILE.unlink(missing_ok=True)
+                print("Preview already stopped.")
+        else:
+            pid = running_pid()
+            if pid:
+                print(f"Preview {'running' if ready() else 'starting'} (PID {pid}): {URL}")
+                return 0
+            print("Preview stopped." if not port_in_use()
+                  else "Preview is not managed by this script; port 4000 is in use.")
+            return 1
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (OSError, RuntimeError) as error:
+        print(f"Preview error: {error}", file=sys.stderr)
+        sys.exit(1)

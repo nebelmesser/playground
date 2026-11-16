@@ -10,6 +10,7 @@ webrick:
     Access-Control-Allow-Origin: "*"
     Permissions-Policy: "accelerometer=*, gyroscope=*, magnetometer=*"
 exclude:
+  - .preview/
   - 4d/app
   - 4d/matryoshka-doll
   - hilbert/app
