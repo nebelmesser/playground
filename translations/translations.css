@@ -32,9 +32,16 @@ blockquote p:last-child, .propositions p:last-child { margin-bottom:0; }
 sup { line-height:0; font-size:.7em; }
 sub { line-height:0; font-size:.75em; }
 .fnref { text-decoration:none; padding:0 .12em; }
-.footnote-popup { position:fixed; z-index:100; width:min(560px,calc(100vw - 24px)); padding:18px 22px; overflow:auto; overscroll-behavior:contain; background:var(--paper); border:1px solid var(--line); border-radius:10px; box-shadow:0 10px 36px #242a2c24; font-size:16px; line-height:1.65; overflow-wrap:anywhere; }
+.footnote-popup { position:fixed; z-index:100; display:flex; flex-direction:column; width:min(560px,calc(100vw - 24px)); overflow:hidden; background:var(--paper); border:1px solid var(--line); border-radius:10px; box-shadow:0 10px 36px #242a2c24; font-size:16px; line-height:1.65; overflow-wrap:anywhere; }
 .footnote-popup[hidden] { display:none; }
-.footnote-popup-label { display:block; margin-bottom:8px; color:var(--accent); font:600 12px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+.footnote-popup-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-shrink:0; padding:12px 16px 8px 22px; }
+.footnote-popup-label { display:block; color:var(--accent); font:600 12px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+.footnote-popup-close { flex-shrink:0; min-width:44px; min-height:44px; padding:0; border:0; border-radius:6px; background:transparent; color:var(--ink); font:28px/1 system-ui,-apple-system,"Segoe UI",sans-serif; cursor:pointer; }
+.footnote-popup-close:hover { background:#f0f4f3; }
+.footnote-popup-close:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+.footnote-popup-content { min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:0 22px 18px; -webkit-overflow-scrolling:touch; }
+.footnote-popup-sheet { max-height:66.666666vh; max-height:66.666666dvh; border-radius:14px 14px 0 0; box-shadow:0 -8px 36px #242a2c24; }
+.footnote-popup-sheet .footnote-popup-content { padding-bottom:calc(18px + env(safe-area-inset-bottom)); }
 .footnote-popup p:last-child { margin-bottom:0; }
 @media print { .footnote-popup { display:none !important; } }
 .notes { font-size:16px; line-height:1.65; }

@@ -19,3 +19,7 @@
 - [Психология жизненных историй](psychology_of_life_stories.html) — Дэн П. МакАдамс (Dan P. McAdams).
 
   *The Psychology of Life Stories*. [Оригинал](https://doi.org/10.1037/1089-2680.5.2.100).
+
+- [Онтология, материя и эмерджентность](emergence1.html) — Мишель Битболь (Michel Bitbol).
+
+  *Ontology, Matter and Emergence*. [Оригинал](https://doi.org/10.1007/s11097-006-9041-z).
